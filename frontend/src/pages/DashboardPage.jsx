@@ -52,6 +52,8 @@ import TaricCodeDisplay from "../components/TaricCodeDisplay";
 import DutyCalculatorCard from "../components/DutyCalculatorCard";
 import DocumentChecklist from "../components/DocumentChecklist";
 import ComplianceAlerts from "../components/ComplianceAlerts";
+import ExportPDF from "../components/ExportPDF";
+import RegulatoryAlertsPanel from "../components/RegulatoryAlertsPanel";
 
 export default function DashboardPage() {
   const { user, token, logout } = useAuth();
@@ -70,6 +72,8 @@ export default function DashboardPage() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteData, setInviteData] = useState({ email: "", name: "", role: "operator" });
   const [inviting, setInviting] = useState(false);
+  const [regulatoryAlerts, setRegulatoryAlerts] = useState([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
 
   const countries = [
     { code: "CN", name: "China" },
@@ -100,6 +104,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchHistory();
     fetchStats();
+    fetchRegulatoryAlerts();
     if (user?.role === "admin") {
       fetchTeamMembers();
     }
@@ -137,6 +142,20 @@ export default function DashboardPage() {
       setTeamMembers(response.data);
     } catch (error) {
       console.error("Error fetching team:", error);
+    }
+  };
+
+  const fetchRegulatoryAlerts = async () => {
+    setLoadingAlerts(true);
+    try {
+      const response = await axios.get(`${API}/alerts/regulatory`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRegulatoryAlerts(response.data);
+    } catch (error) {
+      console.error("Error fetching alerts:", error);
+    } finally {
+      setLoadingAlerts(false);
     }
   };
 
@@ -274,6 +293,11 @@ export default function DashboardPage() {
               <span className="text-sm">{user?.name}</span>
               <span className="text-xs text-cyan-400 uppercase">{user?.role}</span>
             </div>
+            <RegulatoryAlertsPanel 
+              alerts={regulatoryAlerts} 
+              onRefresh={fetchRegulatoryAlerts}
+              loading={loadingAlerts}
+            />
             <div className="flex items-center gap-2">
               <div className="status-dot" />
               <span className="text-xs text-green-400 uppercase tracking-wider hidden sm:inline">Operativo</span>
@@ -502,12 +526,15 @@ export default function DashboardPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {/* Header with confidence */}
+                  {/* Header with confidence and export */}
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-bold">Resultado de Clasificación</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 uppercase">Confianza IA:</span>
-                      <span className="text-cyan-400 font-mono font-bold">{searchResult.ai_confidence}</span>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 uppercase">Confianza IA:</span>
+                        <span className="text-cyan-400 font-mono font-bold">{searchResult.ai_confidence}</span>
+                      </div>
+                      <ExportPDF result={searchResult} />
                     </div>
                   </div>
 
