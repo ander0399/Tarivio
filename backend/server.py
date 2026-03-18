@@ -835,6 +835,276 @@ async def get_document_detail(doc_id: str, current_user: dict = Depends(get_curr
         **OFFICIAL_DOCUMENTS[doc_id]
     }
 
+# ============== IMAGE ANALYSIS ==============
+
+class ImageAnalysisRequest(BaseModel):
+    image_base64: str
+
+class ImageAnalysisResult(BaseModel):
+    product_description: str
+    components: List[str]
+    suggested_category: Optional[str] = None
+    confidence: str
+    details: Optional[str] = None
+
+@api_router.post("/image/analyze", response_model=ImageAnalysisResult)
+async def analyze_image(request: ImageAnalysisRequest, current_user: dict = Depends(get_current_user)):
+    """Analyze product image using AI vision to identify and describe it"""
+    
+    try:
+        from emergentintegrations.llm.chat import ImageContent
+        
+        # Use GPT-5.2 with vision capability
+        system_message = """Eres un experto en identificación de productos para clasificación arancelaria.
+        
+Tu trabajo es analizar imágenes de productos y proporcionar:
+1. Una descripción detallada y precisa del producto para clasificación TARIC
+2. Los componentes principales detectados (materiales, partes, etc.)
+3. La categoría general sugerida (textiles, electrónica, alimentos, maquinaria, etc.)
+4. Nivel de confianza en la identificación
+
+Responde SIEMPRE en formato JSON:
+{
+    "product_description": "Descripción completa y detallada del producto visible en la imagen, incluyendo materiales aparentes, forma, posible uso y características relevantes para clasificación arancelaria",
+    "components": ["componente1", "componente2", "material principal"],
+    "suggested_category": "Categoría general para clasificación",
+    "confidence": "alta|media|baja",
+    "details": "Observaciones adicionales que puedan ayudar en la clasificación"
+}
+
+IMPORTANTE: Sé específico sobre materiales (algodón, acero, plástico, etc.), forma, y posible función del producto."""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"image-{uuid.uuid4()}",
+            system_message=system_message
+        ).with_model("openai", "gpt-5.2")
+        
+        # Extract base64 data (remove data URL prefix if present)
+        image_data = request.image_base64
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+        
+        # Create image content using the correct class
+        image_content = ImageContent(image_base64=image_data)
+        
+        # Create message with image attachment using file_contents
+        user_message = UserMessage(
+            text="Analiza esta imagen de producto y proporciona una descripción detallada para clasificación arancelaria TARIC.",
+            file_contents=[image_content]
+        )
+        
+        response = await chat.send_message(user_message)
+        
+        # Parse response
+        import json
+        clean_response = response.strip()
+        if clean_response.startswith("```"):
+            clean_response = clean_response.split("```")[1]
+            if clean_response.startswith("json"):
+                clean_response = clean_response[4:]
+        clean_response = clean_response.strip()
+        
+        result = json.loads(clean_response)
+        
+        return ImageAnalysisResult(
+            product_description=result.get("product_description", "Producto no identificado"),
+            components=result.get("components", []),
+            suggested_category=result.get("suggested_category"),
+            confidence=result.get("confidence", "media"),
+            details=result.get("details")
+        )
+        
+    except Exception as e:
+        logger.error(f"Image analysis error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al analizar la imagen: {str(e)}")
+
+# ============== MARKET STUDY ==============
+
+class MarketStudyRequest(BaseModel):
+    product_description: str
+    taric_code: Optional[str] = None
+    origin_country: str
+    destination_country: str
+    language: str = "es"
+
+class PestelAnalysis(BaseModel):
+    political: str
+    economic: str
+    social: str
+    technological: str
+    environmental: str
+    legal: str
+
+class MarketSize(BaseModel):
+    description: str
+    value: Optional[str] = None
+    growth_rate: Optional[str] = None
+
+class Competitor(BaseModel):
+    name: str
+    description: Optional[str] = None
+    market_share: Optional[str] = None
+
+class MarketStudyResult(BaseModel):
+    id: str
+    product_name: str
+    origin_country: str
+    destination_country: str
+    executive_summary: str
+    pestel: PestelAnalysis
+    market_size: MarketSize
+    competitors: List[Competitor]
+    trends: List[str]
+    opportunities: List[str]
+    threats: List[str]
+    recommendations: List[str]
+    created_at: str
+
+@api_router.post("/market/study", response_model=MarketStudyResult)
+async def generate_market_study(request: MarketStudyRequest, current_user: dict = Depends(get_current_user)):
+    """Generate a professional market study with PESTEL analysis"""
+    
+    try:
+        lang_instructions = {
+            "es": "Responde completamente en español.",
+            "en": "Respond completely in English.",
+            "pt": "Responda completamente em português.",
+            "fr": "Répondez entièrement en français.",
+            "de": "Antworten Sie vollständig auf Deutsch."
+        }
+        
+        system_message = f"""Eres un analista de mercado profesional especializado en comercio internacional y estudios de viabilidad.
+
+{lang_instructions.get(request.language, lang_instructions['es'])}
+
+Tu trabajo es generar estudios de mercado completos y profesionales que incluyan:
+1. Resumen ejecutivo conciso
+2. Análisis PESTEL detallado (Político, Económico, Social, Tecnológico, Ambiental, Legal)
+3. Estimación del tamaño del mercado
+4. Análisis de competencia
+5. Tendencias actuales del sector
+6. Oportunidades de mercado
+7. Amenazas y riesgos
+8. Recomendaciones estratégicas
+
+Responde SIEMPRE en formato JSON con esta estructura:
+{{
+    "product_name": "Nombre corto del producto",
+    "executive_summary": "Resumen ejecutivo de 2-3 párrafos sobre el potencial del mercado",
+    "pestel": {{
+        "political": "Análisis de factores políticos que afectan la importación/exportación de este producto entre los países",
+        "economic": "Análisis económico: aranceles, tipo de cambio, demanda, poder adquisitivo",
+        "social": "Factores sociales: tendencias de consumo, preferencias del mercado objetivo",
+        "technological": "Aspectos tecnológicos del sector y su evolución",
+        "environmental": "Regulaciones ambientales, sostenibilidad, huella de carbono",
+        "legal": "Marco legal, certificaciones requeridas, normativas de importación"
+    }},
+    "market_size": {{
+        "description": "Descripción del tamaño y estructura del mercado",
+        "value": "€X millones/billones (estimación)",
+        "growth_rate": "X% CAGR"
+    }},
+    "competitors": [
+        {{"name": "Competidor 1", "description": "Breve descripción", "market_share": "X%"}},
+        {{"name": "Competidor 2", "description": "Breve descripción", "market_share": "X%"}}
+    ],
+    "trends": [
+        "Tendencia 1 del mercado",
+        "Tendencia 2 del mercado"
+    ],
+    "opportunities": [
+        "Oportunidad 1",
+        "Oportunidad 2"
+    ],
+    "threats": [
+        "Amenaza 1",
+        "Amenaza 2"
+    ],
+    "recommendations": [
+        "Recomendación estratégica 1",
+        "Recomendación estratégica 2"
+    ]
+}}
+
+Sé específico y proporciona datos realistas basados en conocimiento de mercado actual."""
+
+        user_prompt = f"""Genera un estudio de mercado profesional para el siguiente producto y ruta comercial:
+
+PRODUCTO: {request.product_description}
+{f"CÓDIGO TARIC: {request.taric_code}" if request.taric_code else ""}
+PAÍS DE ORIGEN: {request.origin_country}
+PAÍS DE DESTINO: {request.destination_country}
+
+Por favor proporciona un análisis completo incluyendo PESTEL, tamaño de mercado, competencia, tendencias, oportunidades, amenazas y recomendaciones estratégicas."""
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"market-{uuid.uuid4()}",
+            system_message=system_message
+        ).with_model("openai", "gpt-5.2")
+        
+        user_message = UserMessage(text=user_prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse response
+        import json
+        clean_response = response.strip()
+        if clean_response.startswith("```"):
+            clean_response = clean_response.split("```")[1]
+            if clean_response.startswith("json"):
+                clean_response = clean_response[4:]
+        clean_response = clean_response.strip()
+        
+        result = json.loads(clean_response)
+        study_id = str(uuid.uuid4())
+        
+        # Build response model
+        study_result = MarketStudyResult(
+            id=study_id,
+            product_name=result.get("product_name", request.product_description[:50]),
+            origin_country=request.origin_country,
+            destination_country=request.destination_country,
+            executive_summary=result.get("executive_summary", ""),
+            pestel=PestelAnalysis(
+                political=result.get("pestel", {}).get("political", ""),
+                economic=result.get("pestel", {}).get("economic", ""),
+                social=result.get("pestel", {}).get("social", ""),
+                technological=result.get("pestel", {}).get("technological", ""),
+                environmental=result.get("pestel", {}).get("environmental", ""),
+                legal=result.get("pestel", {}).get("legal", "")
+            ),
+            market_size=MarketSize(
+                description=result.get("market_size", {}).get("description", ""),
+                value=result.get("market_size", {}).get("value"),
+                growth_rate=result.get("market_size", {}).get("growth_rate")
+            ),
+            competitors=[
+                Competitor(
+                    name=c.get("name", ""),
+                    description=c.get("description"),
+                    market_share=c.get("market_share")
+                ) for c in result.get("competitors", [])
+            ],
+            trends=result.get("trends", []),
+            opportunities=result.get("opportunities", []),
+            threats=result.get("threats", []),
+            recommendations=result.get("recommendations", []),
+            created_at=datetime.now(timezone.utc).isoformat()
+        )
+        
+        # Save to database
+        study_doc = study_result.model_dump()
+        study_doc["user_id"] = current_user["id"]
+        study_doc["organization_id"] = current_user.get("organization_id")
+        await db.market_studies.insert_one(study_doc)
+        
+        return study_result
+        
+    except Exception as e:
+        logger.error(f"Market study error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al generar el estudio de mercado: {str(e)}")
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/")

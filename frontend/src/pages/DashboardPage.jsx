@@ -60,6 +60,8 @@ import ComplianceAlerts from "../components/ComplianceAlerts";
 import RegulatoryAlertsPanel from "../components/RegulatoryAlertsPanel";
 import TradeAgreementsPanel from "../components/TradeAgreementsPanel";
 import LanguageSelector from "../components/LanguageSelector";
+import ImageClassifier from "../components/ImageClassifier";
+import MarketStudyPanel from "../components/MarketStudyPanel";
 import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
 import { findApplicableAgreements } from "../config/tradeAgreements";
 
@@ -288,6 +290,14 @@ export default function DashboardPage() {
     navigate("/");
   };
 
+  // Handle product identification from image
+  const handleProductFromImage = (description) => {
+    setSearchQuery(description);
+    // Scroll to search form
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.success(t("imageClassifier.identifiedProduct"));
+  };
+
   const setExampleSearch = (example) => {
     setSearchQuery(example);
   };
@@ -353,34 +363,34 @@ export default function DashboardPage() {
               <div className="cyber-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <BarChart3 className="w-5 h-5 text-cyan-400" />
-                  <span className="label-cyber text-[10px]">ESTE MES</span>
+                  <span className="label-cyber text-[10px]">{t("dashboard.thisMonth")}</span>
                 </div>
                 <div className="text-2xl font-bold text-white font-mono">{stats.searches_this_month}</div>
-                <div className="text-xs text-gray-500">Clasificaciones</div>
+                <div className="text-xs text-gray-500">{t("dashboard.classifications")}</div>
               </div>
               <div className="cyber-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <TrendingUp className="w-5 h-5 text-green-400" />
-                  <span className="label-cyber text-[10px]">TOTAL</span>
+                  <span className="label-cyber text-[10px]">{t("dashboard.total")}</span>
                 </div>
                 <div className="text-2xl font-bold text-white font-mono">{stats.total_searches}</div>
-                <div className="text-xs text-gray-500">Búsquedas históricas</div>
+                <div className="text-xs text-gray-500">{t("dashboard.historicalSearches")}</div>
               </div>
               <div className="cyber-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <Users className="w-5 h-5 text-cyan-400" />
-                  <span className="label-cyber text-[10px]">EQUIPO</span>
+                  <span className="label-cyber text-[10px]">{t("dashboard.teamMembers")}</span>
                 </div>
                 <div className="text-2xl font-bold text-white font-mono">{stats.team_members}</div>
-                <div className="text-xs text-gray-500">Miembros activos</div>
+                <div className="text-xs text-gray-500">{t("dashboard.activeMembers")}</div>
               </div>
               <div className="cyber-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <Shield className="w-5 h-5 text-amber-400" />
-                  <span className="label-cyber text-[10px]">COMPLIANCE</span>
+                  <span className="label-cyber text-[10px]">{t("dashboard.compliance")}</span>
                 </div>
-                <div className="text-2xl font-bold text-green-400 font-mono">OK</div>
-                <div className="text-xs text-gray-500">Sin alertas críticas</div>
+                <div className="text-2xl font-bold text-green-400 font-mono">{t("dashboard.ok")}</div>
+                <div className="text-xs text-gray-500">{t("dashboard.noCriticalAlerts")}</div>
               </div>
             </motion.div>
           )}
@@ -397,7 +407,7 @@ export default function DashboardPage() {
               data-testid="tab-search"
             >
               <Zap className="w-4 h-4" />
-              Clasificar
+              {t("dashboard.search")}
             </button>
             <button
               onClick={() => setActiveTab("history")}
@@ -409,7 +419,7 @@ export default function DashboardPage() {
               data-testid="tab-history"
             >
               <History className="w-4 h-4" />
-              Historial ({history.length})
+              {t("dashboard.history")} ({history.length})
             </button>
             {user?.role === "admin" && (
               <button
@@ -422,7 +432,7 @@ export default function DashboardPage() {
                 data-testid="tab-team"
               >
                 <Users className="w-4 h-4" />
-                Equipo ({teamMembers.length})
+                {t("dashboard.team")} ({teamMembers.length})
               </button>
             )}
           </div>
@@ -430,6 +440,11 @@ export default function DashboardPage() {
           {/* Search Tab */}
           {activeTab === "search" && (
             <div className="space-y-8">
+              {/* Image Classifier Section */}
+              <ImageClassifier 
+                onUseForClassification={handleProductFromImage}
+              />
+
               {/* Search Form */}
               <motion.div 
                 className="cyber-card p-8"
@@ -439,12 +454,12 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold flex items-center gap-3">
                     <Search className="w-6 h-6 text-cyan-400" />
-                    Clasificador TARIC
+                    {t("dashboard.classifier")}
                   </h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Status</span>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">{t("dashboard.status")}</span>
                     <div className="status-dot" />
-                    <span className="text-xs text-green-400 uppercase font-semibold">OPERATIVO</span>
+                    <span className="text-xs text-green-400 uppercase font-semibold">{t("dashboard.operational")}</span>
                   </div>
                 </div>
                 
@@ -453,7 +468,7 @@ export default function DashboardPage() {
                     <textarea
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Describe la mercancía a clasificar con el mayor detalle posible... Ej: Aceite de oliva virgen extra en botella de vidrio de 750ml procedente de España"
+                      placeholder={t("dashboard.classifierDesc")}
                       className="input-cyber min-h-[120px] resize-none pr-16"
                       data-testid="search-input"
                     />
@@ -588,12 +603,12 @@ export default function DashboardPage() {
                         {searching ? (
                           <>
                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            ANALIZANDO...
+                            {t("dashboard.analyzing")}
                           </>
                         ) : (
                           <>
                             <Zap className="w-5 h-5 mr-2" />
-                            CLASIFICAR
+                            {t("dashboard.classify")}
                           </>
                         )}
                       </Button>
@@ -716,6 +731,14 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Market Study Panel */}
+                  <MarketStudyPanel 
+                    productDescription={searchResult.product_description}
+                    taricCode={searchResult.taric_code}
+                    originCountry={originCountry}
+                    destinationCountry={destinationCountry}
+                  />
                 </motion.div>
               )}
             </div>
