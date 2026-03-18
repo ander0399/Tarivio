@@ -1,206 +1,130 @@
-# TARIC AI - Product Requirements Document
+# TaricAI - Product Requirements Document
 
-## Descripción Original del Proyecto
-Aplicación SaaS donde se pueda leer el TARIC y con inteligencia artificial se pueda colocar simplemente una palabra del TARIC de mi producto y se pueda sacar la nomenclatura arancelaria con sitios oficiales del TARIC español o de la Unión Europea. Portal que muestra aranceles, tributos y documentos fitosanitarios y no fitosanitarios necesarios para importar productos.
+## Original Problem Statement
+Crear una aplicación SaaS donde se pueda leer el TARIC y con inteligencia artificial se pueda colocar simplemente una palabra del TARIC de mi producto y se pueda sacar la nomenclatura arancelaria con sitios oficiales del TARIC español o de la Unión Europea. Adicional a eso, créale el portal donde le bote de una vez los aranceles, todos los tributos y los documentos que necesita para poder traer ese producto, todo en un solo lugar y sacado de sitios oficiales de España y de la unión europea.
 
----
+## Target Users
+- Agencias de aduanas
+- Importadores/Exportadores
+- Empresas B2B de comercio internacional
 
-## Estado Actual: v2.5.0 - Funcionalidades Avanzadas
+## Core Requirements
+1. ✅ Clasificación TARIC con IA (GPT-5.2)
+2. ✅ Aranceles y tributos automáticos
+3. ✅ Documentos requeridos para importación
+4. ✅ Fuentes oficiales (UE, AEAT, MAPA)
+5. ✅ País de origen y destino obligatorios
+6. ✅ Detección de acuerdos comerciales
 
-### ✅ Funcionalidades Implementadas
-
-#### 1. Core - Clasificación TARIC con IA (MVP)
-- [x] Búsqueda de productos con descripción en lenguaje natural
-- [x] Clasificación automática con código TARIC de 10 dígitos
-- [x] Análisis con GPT-5.2 via emergentintegrations
-- [x] Nivel de confianza de la IA
-
-#### 2. Origen y Destino OBLIGATORIOS
-- [x] Selector de país de origen obligatorio
-- [x] Selector de país de destino obligatorio
-- [x] Lista completa de TODOS los países del mundo (200+)
-- [x] Países organizados por región (UE, Europa, Norteamérica, Sudamérica, Asia, África, Oceanía)
-- [x] Banderas de países en los selectores
-- [x] Validación en frontend y backend
-
-#### 3. Tratados Comerciales
-- [x] Base de datos de tratados comerciales UE con terceros países (25+)
-- [x] Detección automática de acuerdos aplicables
-- [x] Panel de tratados comerciales en resultados
-- [x] Tasas preferenciales según tratado vigente
-- [x] Documentos requeridos para preferencia
-
-#### 4. Sistema de Internacionalización COMPLETO (i18n) 🆕
-- [x] Selector de idioma en header
-- [x] **5 idiomas soportados**: Español, English, Português, Français, Deutsch
-- [x] Traducciones completas para TODA la plataforma:
-  - Stats cards
-  - Tabs de navegación
-  - Formularios y labels
-  - Botones
-  - Mensajes de error
-  - Componentes de resultados
-  - Panel de tratados
-  - Gestión de equipo
-  - Clasificador de imagen
-  - Estudio de mercado
-- [x] Persistencia de preferencia en localStorage
-- [x] Detección automática del idioma del navegador
-
-#### 5. Clasificación por IMAGEN 🆕
-- [x] Componente ImageClassifier con drag & drop
-- [x] Subida de imagen (JPG, PNG, WebP)
-- [x] Análisis con GPT-5.2 Vision
-- [x] Identificación automática del producto
-- [x] Detección de componentes y materiales
-- [x] Sugerencia de categoría TARIC
-- [x] Botón "Usar para clasificar" que rellena el formulario
-
-#### 6. Estudio de Mercado con PESTEL 🆕
-- [x] Panel MarketStudyPanel integrado en resultados
-- [x] Análisis PESTEL completo:
-  - **P**olítico: Factores políticos entre países
-  - **E**conómico: Aranceles, demanda, poder adquisitivo
-  - **S**ocial: Tendencias de consumo
-  - **T**ecnológico: Evolución del sector
-  - **E**nvironmental (Ambiental): Regulaciones, sostenibilidad
-  - **L**egal: Marco normativo, certificaciones
-- [x] Tamaño del mercado estimado
-- [x] Análisis de competencia
-- [x] Tendencias del mercado
-- [x] Oportunidades identificadas
-- [x] Amenazas y riesgos
-- [x] Recomendaciones estratégicas
-- [x] **Descarga PDF profesional** con jsPDF
-
-#### 7. Aranceles y Tributos
-- [x] Desglose completo de aranceles (NMF, preferenciales)
-- [x] IVA de importación
-- [x] Derechos anti-dumping
-- [x] Base legal de cada tributo
-
-#### 8. Documentación Requerida
-- [x] Lista de documentos obligatorios y opcionales
-- [x] Tipos: Fitosanitario, Sanitario, Aduanero, CITES
-- [x] Autoridad emisora y tiempo de tramitación
-- [x] Enlaces a portales de tramitación online
-
-#### 9. Suite B2B
-- [x] Autenticación JWT
-- [x] Organizaciones
-- [x] Gestión de equipos (Admin, Operador, Consultor)
-- [x] Historial de clasificaciones
-- [x] Estadísticas de uso
-
-#### 10. UI/UX
-- [x] Diseño futurista oscuro (cyberpunk)
-- [x] Responsive design
-- [x] Animaciones con Framer Motion
-- [x] Componentes Shadcn/UI
+## Tech Stack
+- **Backend**: FastAPI, Python, MongoDB
+- **Frontend**: React, Tailwind CSS, Shadcn/UI
+- **AI**: emergentintegrations (GPT-5.2 para texto y visión)
+- **Auth**: JWT tokens
 
 ---
 
-## Stack Tecnológico
+## Implementation Status
 
-### Backend
-- **Framework**: FastAPI
-- **Base de datos**: MongoDB
-- **Autenticación**: JWT
-- **IA**: OpenAI GPT-5.2 via emergentintegrations (texto + visión)
+### Phase 1: MVP ✅ COMPLETED
+- User authentication (register/login/JWT)
+- Basic TARIC search with AI
+- Official sources integration
+- Tariffs and document checklist
 
-### Frontend
-- **Framework**: React 18
-- **Estilos**: Tailwind CSS
-- **Componentes**: Shadcn/UI
-- **Animaciones**: Framer Motion
-- **PDF**: jsPDF
+### Phase 2: B2B Features ✅ COMPLETED
+- Organization/Team management
+- Search history per organization
+- Client reference tracking
+- Trade agreements detection
 
----
+### Phase 3: Advanced AI Features ✅ COMPLETED (Dec 2025)
+- **Image Classification**: Upload product photo → AI describes → Classify
+- **Market Study with PESTEL**: Generate professional market reports, downloadable as PDF
+- **AI Clarification Questions**: If description is vague, AI asks clarifying questions BEFORE classification
+- **Internationalization (i18n)**: 5 languages (ES, EN, PT, FR, DE)
+- **Country Selector with Search**: Searchable dropdown for better UX
 
-## Endpoints API Principales
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| POST | /api/auth/register | Registro de usuario |
-| POST | /api/auth/login | Login (retorna JWT) |
-| POST | /api/taric/search | Búsqueda TARIC con IA |
-| POST | /api/image/analyze | Análisis de imagen con visión 🆕 |
-| POST | /api/market/study | Estudio de mercado con PESTEL 🆕 |
-| GET | /api/taric/history | Historial del usuario |
+### Bug Fixes (Dec 18, 2025)
+1. ✅ **Image classification errors** - Fixed base64 encoding handling, improved error messages
+2. ✅ **Clarification questions timing** - Now appear BEFORE classification (new endpoint `/api/taric/check-clarification`)
+3. ✅ **Market study timeout** - Increased to 2 minutes with proper abort handling
 
 ---
 
-## Estructura de Archivos Principal
+## API Endpoints
 
-```
-/app/
-├── backend/
-│   ├── server.py                    # FastAPI + endpoints
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ImageClassifier.jsx      # 🆕 Clasificación por imagen
-│   │   │   ├── MarketStudyPanel.jsx     # 🆕 Estudio de mercado
-│   │   │   ├── LanguageSelector.jsx     # Selector de idioma
-│   │   │   ├── TradeAgreementsPanel.jsx
-│   │   │   ├── DocumentChecklist.jsx
-│   │   │   └── ...
-│   │   ├── config/
-│   │   │   ├── countries.js             # Lista de países
-│   │   │   ├── tradeAgreements.js       # Tratados comerciales
-│   │   │   └── i18n.js                  # Traducciones (5 idiomas)
-│   │   ├── contexts/
-│   │   │   └── LanguageContext.jsx
-│   │   └── pages/
-│   │       └── DashboardPage.jsx
-│   └── package.json
-└── memory/
-    └── PRD.md
-```
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user
+
+### TARIC Classification
+- `POST /api/taric/search` - Main classification (requires origin/destination)
+- `POST /api/taric/check-clarification` - **NEW** Pre-check if description needs clarification
+- `GET /api/taric/history` - Get search history
+- `GET /api/taric/result/{id}` - Get specific result
+- `DELETE /api/taric/history/{id}` - Delete from history
+
+### Advanced Features
+- `POST /api/image/analyze` - Analyze product image with GPT-5.2 vision
+- `POST /api/market/study` - Generate PESTEL market study
+
+### Team Management
+- `GET /api/team/members` - List team members
+- `POST /api/team/invite` - Invite new member
+- `DELETE /api/team/members/{id}` - Remove member
+- `GET /api/team/stats` - Organization statistics
+
+### Other
+- `GET /api/alerts/regulatory` - Regulatory alerts
+- `GET /api/documents/library` - Official documents database
 
 ---
 
-## Tareas Pendientes
-
-### P1 - Alta Prioridad
-- [ ] Mejorar búsqueda en dropdown de países (filtro por texto)
-- [ ] Cache de resultados de estudios de mercado
-- [ ] Exportar historial en CSV
-
-### P2 - Media Prioridad
-- [ ] Notificaciones email para alertas regulatorias
-- [ ] Dashboard con gráficos de uso mensual
-- [ ] Comparación de rutas comerciales
-
-### P3 - Backlog
-- [ ] Integración con sistemas ERP
-- [ ] API pública para terceros
-- [ ] App móvil nativa
+## Key Files
+- `/app/backend/server.py` - All backend logic (models, routes, AI functions)
+- `/app/frontend/src/pages/DashboardPage.jsx` - Main dashboard
+- `/app/frontend/src/components/ImageClassifier.jsx` - Image upload/analysis
+- `/app/frontend/src/components/MarketStudyPanel.jsx` - PESTEL reports
+- `/app/frontend/src/components/ClarificationQuestions.jsx` - AI questions UI
+- `/app/frontend/src/components/CountrySearchSelect.jsx` - Searchable country dropdown
+- `/app/frontend/src/config/i18n.js` - Translations (5 languages)
 
 ---
 
 ## Testing
-
-- **Backend**: 27/27 tests passed (100%)
-- **Frontend**: Todas las funcionalidades verificadas
-- **Test files**: `/app/backend/tests/`
-
----
-
-## Credenciales de Prueba
-- **Email**: newuser2025@test.com
-- **Password**: Test123!
+- Backend tests: `/app/backend/tests/test_bug_fixes_iteration8.py`
+- Test reports: `/app/test_reports/iteration_8.json`
+- Test credentials: `test@test.com` / `Test123!`
 
 ---
 
-## Última Actualización
-**Fecha**: 2025-12-18
-**Versión**: 2.5.0
+## Future Tasks (Backlog)
 
-**Cambios v2.5.0**:
-- Clasificación por imagen con GPT-5.2 Vision
-- Estudio de mercado con análisis PESTEL completo
-- Descarga de estudio en PDF profesional
-- Sistema i18n completo (5 idiomas)
-- Traducciones completas para toda la plataforma
+### P1 - High Priority
+- Monthly usage dashboard with graphs
+- Export search history to Excel/CSV
+- Batch classification (multiple products)
+
+### P2 - Medium Priority
+- ERP system integration
+- Automatic checklist generator for forms
+- Email notifications for regulatory alerts
+
+### P3 - Nice to Have
+- Mobile app (React Native)
+- AI chatbot for customs questions
+- Integration with logistics providers
+
+---
+
+## Known Limitations
+- Market study occasionally has JSON parsing errors (retries work)
+- Image classification requires clear product photos
+- Clarification questions are AI-generated (quality varies)
+
+## Performance Notes
+- Market study takes ~30-60 seconds to generate
+- Image analysis takes ~5-10 seconds
+- Use ?w=400 suffix for Unsplash images to reduce download size
