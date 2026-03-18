@@ -30,9 +30,7 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
-  UserPlus,
-  MapPin,
-  Plane
+  UserPlus
 } from "lucide-react";
 import {
   Select,
@@ -62,6 +60,8 @@ import TradeAgreementsPanel from "../components/TradeAgreementsPanel";
 import LanguageSelector from "../components/LanguageSelector";
 import ImageClassifier from "../components/ImageClassifier";
 import MarketStudyPanel from "../components/MarketStudyPanel";
+import CountrySearchSelect from "../components/CountrySearchSelect";
+import ClarificationQuestions from "../components/ClarificationQuestions";
 import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
 import { findApplicableAgreements } from "../config/tradeAgreements";
 
@@ -502,79 +502,27 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-cyan-500/10">
-                    {/* Origin Country - REQUIRED */}
-                    <div>
-                      <label className="label-cyber block mb-2 flex items-center gap-2">
-                        <MapPin className="w-3 h-3" />
-                        {t("dashboard.origin")}
-                        <span className="text-red-400 text-[10px] ml-1">* {t("dashboard.originRequired")}</span>
-                      </label>
-                      <Select value={originCountry} onValueChange={setOriginCountry}>
-                        <SelectTrigger className={`input-cyber h-12 ${!originCountry ? 'border-red-500/30' : ''}`} data-testid="origin-country-select">
-                          <SelectValue placeholder={t("dashboard.selectCountry")} />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#0d1424] border-cyan-500/30 max-h-[300px]">
-                          {REGION_ORDER.map((region) => (
-                            countriesByRegion[region] && (
-                              <SelectGroup key={region}>
-                                <SelectLabel className="text-cyan-400 text-xs uppercase tracking-wider px-2 py-1">
-                                  {region}
-                                </SelectLabel>
-                                {countriesByRegion[region].map((country) => (
-                                  <SelectItem 
-                                    key={country.code} 
-                                    value={country.code} 
-                                    className="text-white hover:bg-cyan-500/10"
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      <span>{country.flag}</span>
-                                      <span>{country.name}</span>
-                                    </span>
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Origin Country - REQUIRED with search */}
+                    <CountrySearchSelect
+                      value={originCountry}
+                      onChange={setOriginCountry}
+                      label={t("dashboard.origin")}
+                      placeholder={t("dashboard.selectCountry")}
+                      required={true}
+                      error={!originCountry}
+                      testId="origin-country-select"
+                    />
                     
-                    {/* Destination Country - REQUIRED */}
-                    <div>
-                      <label className="label-cyber block mb-2 flex items-center gap-2">
-                        <Plane className="w-3 h-3" />
-                        {t("dashboard.destination")}
-                        <span className="text-red-400 text-[10px] ml-1">* {t("dashboard.destinationRequired")}</span>
-                      </label>
-                      <Select value={destinationCountry} onValueChange={setDestinationCountry}>
-                        <SelectTrigger className={`input-cyber h-12 ${!destinationCountry ? 'border-red-500/30' : ''}`} data-testid="destination-country-select">
-                          <SelectValue placeholder={t("dashboard.selectCountry")} />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#0d1424] border-cyan-500/30 max-h-[300px]">
-                          {REGION_ORDER.map((region) => (
-                            countriesByRegion[region] && (
-                              <SelectGroup key={region}>
-                                <SelectLabel className="text-cyan-400 text-xs uppercase tracking-wider px-2 py-1">
-                                  {region}
-                                </SelectLabel>
-                                {countriesByRegion[region].map((country) => (
-                                  <SelectItem 
-                                    key={country.code} 
-                                    value={country.code} 
-                                    className="text-white hover:bg-cyan-500/10"
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      <span>{country.flag}</span>
-                                      <span>{country.name}</span>
-                                    </span>
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Destination Country - REQUIRED with search */}
+                    <CountrySearchSelect
+                      value={destinationCountry}
+                      onChange={setDestinationCountry}
+                      label={t("dashboard.destination")}
+                      placeholder={t("dashboard.selectCountry")}
+                      required={true}
+                      error={!destinationCountry}
+                      testId="destination-country-select"
+                    />
                   </div>
 
                   {/* Second row: Reference and Submit */}
@@ -656,6 +604,26 @@ export default function DashboardPage() {
                     originCountry={originCountry}
                     destinationCountry={destinationCountry}
                   />
+
+                  {/* Clarification Questions - Show if AI needs more info */}
+                  {searchResult.needs_clarification && searchResult.clarification_questions?.length > 0 && (
+                    <ClarificationQuestions
+                      questions={searchResult.clarification_questions}
+                      productDescription={searchQuery}
+                      onAnswer={(clarifiedDescription) => {
+                        setSearchQuery(clarifiedDescription);
+                        // Re-trigger search with clarified description
+                        setTimeout(() => {
+                          const form = document.querySelector('form');
+                          if (form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                        }, 100);
+                      }}
+                      onSkip={() => {
+                        // User chose to skip clarification, proceed with current result
+                        toast.info("Resultado mostrado sin información adicional");
+                      }}
+                    />
+                  )}
 
                   {/* TARIC Code */}
                   <div className="cyber-card p-6">

@@ -113,6 +113,12 @@ class ComplianceAlert(BaseModel):
     message: str
     official_reference: Optional[str] = None
 
+# Clarification question model
+class ClarificationQuestion(BaseModel):
+    question: str
+    options: List[str]
+    impacts: Optional[str] = None
+
 class TaricResult(BaseModel):
     id: str
     user_id: str
@@ -136,6 +142,8 @@ class TaricResult(BaseModel):
     official_sources: List[dict]
     ai_explanation: str
     ai_confidence: str
+    needs_clarification: bool = False
+    clarification_questions: List[ClarificationQuestion] = []
     created_at: str
 
 class SearchHistoryItem(BaseModel):
@@ -212,11 +220,16 @@ Tu trabajo es analizar descripciones de productos y proporcionar:
 5. Documentos requeridos para importación según la ruta comercial
 6. Alertas de compliance (anti-dumping, sanciones, restricciones fitosanitarias, CITES)
 7. Nivel de confianza de tu clasificación
+8. PREGUNTAS DE CLARIFICACIÓN si la descripción es ambigua o incompleta
 
-IMPORTANTE: 
-- Considera SIEMPRE el país de origen y destino para calcular aranceles correctos
-- Si hay tratados comerciales vigentes, calcula las tasas preferenciales
-- Los aranceles varían según la ruta comercial (ej: Chile->España tiene 0% por acuerdo UE-Chile)
+IMPORTANTE SOBRE PREGUNTAS DE CLARIFICACIÓN:
+- Si el producto puede clasificarse en diferentes códigos dependiendo de detalles específicos, INCLUYE preguntas de clarificación
+- Ejemplos de preguntas necesarias:
+  * Ropa: ¿Es para hombre, mujer o niño? ¿Tejido de punto o plano?
+  * Calzado: ¿Es deportivo, de vestir o de trabajo? ¿Material de la suela?
+  * Alimentos: ¿Fresco o procesado? ¿Orgánico? ¿Presentación (granel, envasado)?
+  * Maquinaria: ¿Nueva o usada? ¿Capacidad/potencia específica?
+  * Productos químicos: ¿Pureza? ¿Uso industrial o consumo?
 
 Responde SIEMPRE en formato JSON válido con esta estructura exacta:
 {
@@ -226,6 +239,11 @@ Responde SIEMPRE en formato JSON válido con esta estructura exacta:
     "heading": "34",
     "subheading": "56",
     "confidence": "alta|media|baja",
+    "needs_clarification": true|false,
+    "clarification_questions": [
+        {"question": "¿El producto es para hombre, mujer o niño?", "options": ["Hombre", "Mujer", "Niño/Niña", "Unisex"], "impacts": "Afecta los dígitos 7-8 del código TARIC"},
+        {"question": "¿De qué material está fabricado principalmente?", "options": ["Algodón 100%", "Poliéster", "Mezcla", "Otro"], "impacts": "Determina el capítulo y arancel aplicable"}
+    ],
     "tariffs": [
         {"duty_type": "Derecho de terceros países (NMF)", "rate": "5.0%", "description": "Arancel convencional sin preferencia", "legal_base": "Reglamento (CEE) nº 2658/87"},
         {"duty_type": "Derecho preferencial", "rate": "0%", "description": "Tasa aplicable por acuerdo comercial vigente", "legal_base": "Acuerdo UE-[País]"},
@@ -250,8 +268,6 @@ FUENTES OFICIALES que debes referenciar:
 - Access2Markets (trade.ec.europa.eu/access-to-markets) para acuerdos comerciales
 - Agencia Tributaria de España (agenciatributaria.es)
 - Ministerio de Agricultura, Pesca y Alimentación (mapa.gob.es)
-- BOE para normativa española
-- DOUE para normativa europea
 
 Si detectas posibles problemas de compliance (anti-dumping, sanciones, CITES, etc.), SIEMPRE inclúyelos en compliance_alerts."""
 
@@ -267,6 +283,7 @@ Proporciona todos los detalles de importación incluyendo:
 2. Aranceles PREFERENCIALES si existe acuerdo comercial entre origen y destino
 3. Documentos necesarios para esta ruta específica
 4. Alertas de compliance relevantes
+5. SI LA DESCRIPCIÓN ES AMBIGUA O INCOMPLETA, incluye preguntas de clarificación para afinar el código TARIC
 
 Producto a clasificar: {product_description}"""
     
@@ -281,14 +298,29 @@ Producto a clasificar: {product_description}"""
         response = await chat.send_message(user_message)
         
         import json
+        import re
         clean_response = response.strip()
-        if clean_response.startswith("```"):
-            clean_response = clean_response.split("```")[1]
-            if clean_response.startswith("json"):
-                clean_response = clean_response[4:]
+        
+        # Remove markdown code blocks
+        if "```json" in clean_response:
+            clean_response = clean_response.split("```json")[1].split("```")[0]
+        elif "```" in clean_response:
+            parts = clean_response.split("```")
+            if len(parts) > 1:
+                clean_response = parts[1]
+        
         clean_response = clean_response.strip()
         
-        result = json.loads(clean_response)
+        try:
+            result = json.loads(clean_response)
+        except json.JSONDecodeError:
+            # Try regex extraction
+            json_match = re.search(r'\{.*\}', clean_response, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                raise ValueError("Could not parse JSON response")
+        
         return result
         
     except Exception as e:
@@ -300,6 +332,8 @@ Producto a clasificar: {product_description}"""
             "heading": "00",
             "subheading": "00",
             "confidence": "baja",
+            "needs_clarification": False,
+            "clarification_questions": [],
             "tariffs": [{"duty_type": "No disponible", "rate": "N/A", "description": "Error en consulta", "legal_base": None}],
             "preferential_duties": None,
             "trade_agreement_applied": None,
@@ -650,6 +684,16 @@ async def search_taric(request: TaricSearchRequest, current_user: dict = Depends
     confidence_map = {"alta": "95%", "media": "80%", "baja": "60%"}
     ai_confidence = confidence_map.get(ai_result.get("confidence", "media"), "80%")
     
+    # Build clarification questions if needed
+    clarification_questions = []
+    if ai_result.get("needs_clarification", False) and ai_result.get("clarification_questions"):
+        for q in ai_result.get("clarification_questions", []):
+            clarification_questions.append(ClarificationQuestion(
+                question=q.get("question", ""),
+                options=q.get("options", []),
+                impacts=q.get("impacts")
+            ))
+    
     result = TaricResult(
         id=result_id,
         user_id=current_user["id"],
@@ -673,6 +717,8 @@ async def search_taric(request: TaricSearchRequest, current_user: dict = Depends
         official_sources=official_sources,
         ai_explanation=ai_result.get("explanation", ""),
         ai_confidence=ai_confidence,
+        needs_clarification=ai_result.get("needs_clarification", False),
+        clarification_questions=clarification_questions,
         created_at=datetime.now(timezone.utc).isoformat()
     )
     
@@ -853,26 +899,52 @@ async def analyze_image(request: ImageAnalysisRequest, current_user: dict = Depe
     
     try:
         from emergentintegrations.llm.chat import ImageContent
+        import base64
+        import re
         
-        # Use GPT-5.2 with vision capability
-        system_message = """Eres un experto en identificación de productos para clasificación arancelaria.
+        # Extract and validate base64 data
+        image_data = request.image_base64
         
-Tu trabajo es analizar imágenes de productos y proporcionar:
-1. Una descripción detallada y precisa del producto para clasificación TARIC
-2. Los componentes principales detectados (materiales, partes, etc.)
-3. La categoría general sugerida (textiles, electrónica, alimentos, maquinaria, etc.)
-4. Nivel de confianza en la identificación
+        # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+        if image_data.startswith("data:"):
+            # Extract the base64 part after the comma
+            match = re.match(r'data:image/[^;]+;base64,(.+)', image_data)
+            if match:
+                image_data = match.group(1)
+            else:
+                # Try simple split
+                parts = image_data.split(",")
+                if len(parts) > 1:
+                    image_data = parts[1]
+        
+        # Validate base64
+        try:
+            # Try to decode to verify it's valid base64
+            decoded = base64.b64decode(image_data)
+            if len(decoded) < 100:
+                raise ValueError("Image too small")
+            logger.info(f"Image validated: {len(decoded)} bytes")
+        except Exception as e:
+            logger.error(f"Invalid base64 image: {e}")
+            raise HTTPException(status_code=400, detail="Imagen inválida. Por favor sube una imagen JPG, PNG o WebP válida.")
+        
+        system_message = """Eres un experto en identificación de productos para clasificación arancelaria TARIC.
 
-Responde SIEMPRE en formato JSON:
+Analiza la imagen y proporciona una descripción DETALLADA del producto incluyendo:
+- Qué es el producto exactamente
+- Material principal aparente (metal, plástico, tela, vidrio, etc.)
+- Características físicas visibles
+- Posible uso o función
+- Categoría general para clasificación
+
+Responde SIEMPRE en formato JSON válido:
 {
-    "product_description": "Descripción completa y detallada del producto visible en la imagen, incluyendo materiales aparentes, forma, posible uso y características relevantes para clasificación arancelaria",
-    "components": ["componente1", "componente2", "material principal"],
-    "suggested_category": "Categoría general para clasificación",
+    "product_description": "Descripción completa y detallada del producto para clasificación arancelaria",
+    "components": ["material1", "componente2"],
+    "suggested_category": "Categoría para TARIC",
     "confidence": "alta|media|baja",
-    "details": "Observaciones adicionales que puedan ayudar en la clasificación"
-}
-
-IMPORTANTE: Sé específico sobre materiales (algodón, acero, plástico, etc.), forma, y posible función del producto."""
+    "details": "Observaciones adicionales"
+}"""
 
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
@@ -880,41 +952,53 @@ IMPORTANTE: Sé específico sobre materiales (algodón, acero, plástico, etc.),
             system_message=system_message
         ).with_model("openai", "gpt-5.2")
         
-        # Extract base64 data (remove data URL prefix if present)
-        image_data = request.image_base64
-        if "," in image_data:
-            image_data = image_data.split(",")[1]
-        
-        # Create image content using the correct class
+        # Create image content
         image_content = ImageContent(image_base64=image_data)
         
-        # Create message with image attachment using file_contents
         user_message = UserMessage(
-            text="Analiza esta imagen de producto y proporciona una descripción detallada para clasificación arancelaria TARIC.",
+            text="Analiza esta imagen y describe el producto para clasificación arancelaria TARIC. Responde en JSON.",
             file_contents=[image_content]
         )
         
         response = await chat.send_message(user_message)
+        logger.info(f"Image analysis response: {response[:200]}...")
         
         # Parse response
         import json
         clean_response = response.strip()
-        if clean_response.startswith("```"):
-            clean_response = clean_response.split("```")[1]
-            if clean_response.startswith("json"):
-                clean_response = clean_response[4:]
+        
+        # Remove markdown code blocks if present
+        if "```json" in clean_response:
+            clean_response = clean_response.split("```json")[1].split("```")[0]
+        elif "```" in clean_response:
+            clean_response = clean_response.split("```")[1].split("```")[0]
+        
         clean_response = clean_response.strip()
         
-        result = json.loads(clean_response)
+        try:
+            result = json.loads(clean_response)
+        except json.JSONDecodeError:
+            # Try to extract JSON from the response
+            json_match = re.search(r'\{[^{}]*\}', clean_response, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                result = {
+                    "product_description": clean_response,
+                    "components": [],
+                    "confidence": "media"
+                }
         
         return ImageAnalysisResult(
-            product_description=result.get("product_description", "Producto no identificado"),
+            product_description=result.get("product_description", "Producto identificado"),
             components=result.get("components", []),
             suggested_category=result.get("suggested_category"),
             confidence=result.get("confidence", "media"),
             details=result.get("details")
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Image analysis error: {e}")
         raise HTTPException(status_code=500, detail=f"Error al analizar la imagen: {str(e)}")
@@ -1046,17 +1130,37 @@ Por favor proporciona un análisis completo incluyendo PESTEL, tamaño de mercad
         
         user_message = UserMessage(text=user_prompt)
         response = await chat.send_message(user_message)
+        logger.info(f"Market study response received, length: {len(response)}")
         
         # Parse response
         import json
+        import re
         clean_response = response.strip()
-        if clean_response.startswith("```"):
-            clean_response = clean_response.split("```")[1]
-            if clean_response.startswith("json"):
-                clean_response = clean_response[4:]
+        
+        # Remove markdown code blocks
+        if "```json" in clean_response:
+            clean_response = clean_response.split("```json")[1].split("```")[0]
+        elif "```" in clean_response:
+            parts = clean_response.split("```")
+            if len(parts) > 1:
+                clean_response = parts[1]
+        
         clean_response = clean_response.strip()
         
-        result = json.loads(clean_response)
+        try:
+            result = json.loads(clean_response)
+        except json.JSONDecodeError as je:
+            logger.error(f"JSON parse error: {je}, trying regex extraction")
+            # Try to extract JSON object
+            json_match = re.search(r'\{.*\}', clean_response, re.DOTALL)
+            if json_match:
+                try:
+                    result = json.loads(json_match.group())
+                except:
+                    raise HTTPException(status_code=500, detail="Error al procesar respuesta del estudio de mercado")
+            else:
+                raise HTTPException(status_code=500, detail="Error al generar el estudio de mercado")
+        
         study_id = str(uuid.uuid4())
         
         # Build response model
