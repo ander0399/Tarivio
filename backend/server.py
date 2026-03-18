@@ -70,7 +70,7 @@ class TeamMemberResponse(BaseModel):
     email: str
     name: str
     role: str
-    status: str = "active"
+    member_status: str = "active"
     created_at: str
     last_active: Optional[str] = None
 
@@ -83,8 +83,10 @@ class OrganizationStats(BaseModel):
 # TARIC Models
 class TaricSearchRequest(BaseModel):
     product_description: str
-    origin_country: Optional[str] = None
+    origin_country: str  # Now required
+    destination_country: str = "ES"  # Default to Spain
     client_reference: Optional[str] = None  # For B2B tracking
+    trade_agreements: Optional[List[str]] = None  # Applicable trade agreements
 
 class DocumentRequirement(BaseModel):
     name: str
@@ -116,7 +118,8 @@ class TaricResult(BaseModel):
     user_id: str
     organization_id: Optional[str]
     product_description: str
-    origin_country: Optional[str]
+    origin_country: str
+    destination_country: str
     client_reference: Optional[str]
     taric_code: str
     taric_description: str
@@ -129,6 +132,7 @@ class TaricResult(BaseModel):
     total_duty_estimate: str
     vat_rate: str
     preferential_duties: Optional[str]
+    trade_agreements_applied: Optional[List[str]]
     official_sources: List[dict]
     ai_explanation: str
     ai_confidence: str
@@ -183,20 +187,38 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 # ============== AI SEARCH FUNCTION ==============
 
-async def analyze_product_with_ai(product_description: str, origin_country: Optional[str] = None) -> dict:
+async def analyze_product_with_ai(
+    product_description: str, 
+    origin_country: str,
+    destination_country: str = "ES",
+    trade_agreements: Optional[List[str]] = None
+) -> dict:
     """Use GPT-5.2 to analyze product and suggest TARIC code with compliance checks"""
+    
+    agreements_info = ""
+    if trade_agreements and len(trade_agreements) > 0:
+        agreements_info = f"\n\nTRATADOS COMERCIALES APLICABLES entre {origin_country} y {destination_country}:\n"
+        for agreement in trade_agreements:
+            agreements_info += f"- {agreement}\n"
+        agreements_info += "\nSi alguno de estos acuerdos aplica al producto, indica las tasas preferenciales correspondientes."
     
     system_message = """Eres un experto en clasificación arancelaria del TARIC (Arancel Integrado de las Comunidades Europeas) y compliance aduanero.
 
 Tu trabajo es analizar descripciones de productos y proporcionar:
 1. El código TARIC de 10 dígitos más apropiado según la Nomenclatura Combinada oficial
 2. Descripción oficial del código según el TARIC de la UE
-3. Aranceles aplicables (convencionales, preferenciales si aplica)
-4. Documentos requeridos para importación en España/UE
-5. Alertas de compliance (anti-dumping, sanciones, restricciones fitosanitarias, CITES)
-6. Nivel de confianza de tu clasificación
+3. Aranceles aplicables según el país de ORIGEN y DESTINO especificados
+4. Aranceles PREFERENCIALES si existe un tratado comercial vigente entre origen y destino
+5. Documentos requeridos para importación según la ruta comercial
+6. Alertas de compliance (anti-dumping, sanciones, restricciones fitosanitarias, CITES)
+7. Nivel de confianza de tu clasificación
 
-IMPORTANTE: Responde SIEMPRE en formato JSON válido con esta estructura exacta:
+IMPORTANTE: 
+- Considera SIEMPRE el país de origen y destino para calcular aranceles correctos
+- Si hay tratados comerciales vigentes, calcula las tasas preferenciales
+- Los aranceles varían según la ruta comercial (ej: Chile->España tiene 0% por acuerdo UE-Chile)
+
+Responde SIEMPRE en formato JSON válido con esta estructura exacta:
 {
     "taric_code": "1234567890",
     "description": "Descripción oficial del código TARIC según nomenclatura combinada",
@@ -205,10 +227,12 @@ IMPORTANTE: Responde SIEMPRE en formato JSON válido con esta estructura exacta:
     "subheading": "56",
     "confidence": "alta|media|baja",
     "tariffs": [
-        {"duty_type": "Derecho de terceros países", "rate": "5.0%", "description": "Arancel convencional", "legal_base": "Reglamento (CEE) nº 2658/87"},
+        {"duty_type": "Derecho de terceros países (NMF)", "rate": "5.0%", "description": "Arancel convencional sin preferencia", "legal_base": "Reglamento (CEE) nº 2658/87"},
+        {"duty_type": "Derecho preferencial", "rate": "0%", "description": "Tasa aplicable por acuerdo comercial vigente", "legal_base": "Acuerdo UE-[País]"},
         {"duty_type": "IVA importación", "rate": "21%", "description": "Tipo general España", "legal_base": "Ley 37/1992"}
     ],
-    "preferential_duties": "0% con EUR.1 de Chile (Acuerdo UE-Chile)",
+    "preferential_duties": "0% con certificado EUR.1 por Acuerdo UE-Chile",
+    "trade_agreement_applied": "Acuerdo de Asociación UE-Chile",
     "documents": [
         {"name": "Certificado fitosanitario", "type": "fitosanitario", "required": true, "description": "Expedido por SENASA del país de origen", "official_link": "https://www.mapa.gob.es/", "issuing_authority": "Ministerio de Agricultura"},
         {"name": "DUA (Documento Único Administrativo)", "type": "aduanero", "required": true, "description": "Declaración de importación obligatoria", "official_link": "https://www.agenciatributaria.es/", "issuing_authority": "AEAT"}
@@ -216,13 +240,14 @@ IMPORTANTE: Responde SIEMPRE en formato JSON válido con esta estructura exacta:
     "compliance_alerts": [
         {"type": "restriction", "severity": "medium", "message": "Producto sujeto a control fitosanitario en frontera", "official_reference": "Reglamento (UE) 2017/625"}
     ],
-    "total_duty_estimate": "26%",
+    "total_duty_estimate": "21% (preferencial + IVA)",
     "vat_rate": "21%",
-    "explanation": "Explicación detallada de la clasificación, notas de sección/capítulo aplicables, y consideraciones importantes para el importador"
+    "explanation": "Explicación detallada de la clasificación, incluyendo por qué se aplican o no tasas preferenciales según el tratado comercial entre los países de origen y destino"
 }
 
 FUENTES OFICIALES que debes referenciar:
 - TARIC de la Comisión Europea (ec.europa.eu/taxation_customs)
+- Access2Markets (trade.ec.europa.eu/access-to-markets) para acuerdos comerciales
 - Agencia Tributaria de España (agenciatributaria.es)
 - Ministerio de Agricultura, Pesca y Alimentación (mapa.gob.es)
 - BOE para normativa española
@@ -230,9 +255,18 @@ FUENTES OFICIALES que debes referenciar:
 
 Si detectas posibles problemas de compliance (anti-dumping, sanciones, CITES, etc.), SIEMPRE inclúyelos en compliance_alerts."""
 
-    origin_info = f" País de origen declarado: {origin_country}." if origin_country else ""
     user_prompt = f"""Clasifica el siguiente producto en el TARIC de la Unión Europea.
-Proporciona todos los detalles de importación para España incluyendo verificación de compliance.{origin_info}
+
+RUTA COMERCIAL:
+- País de ORIGEN: {origin_country}
+- País de DESTINO: {destination_country}
+{agreements_info}
+
+Proporciona todos los detalles de importación incluyendo:
+1. Aranceles NMF (Nación Más Favorecida) estándar
+2. Aranceles PREFERENCIALES si existe acuerdo comercial entre origen y destino
+3. Documentos necesarios para esta ruta específica
+4. Alertas de compliance relevantes
 
 Producto a clasificar: {product_description}"""
     
@@ -268,6 +302,7 @@ Producto a clasificar: {product_description}"""
             "confidence": "baja",
             "tariffs": [{"duty_type": "No disponible", "rate": "N/A", "description": "Error en consulta", "legal_base": None}],
             "preferential_duties": None,
+            "trade_agreement_applied": None,
             "documents": [],
             "compliance_alerts": [],
             "total_duty_estimate": "N/A",
@@ -379,7 +414,7 @@ async def get_team_members(current_user: dict = Depends(get_current_user)):
         email=m["email"],
         name=m["name"],
         role=m.get("role", "operator"),
-        status="active",
+        member_status="active",
         created_at=m["created_at"],
         last_active=m.get("last_active")
     ) for m in members]
@@ -424,7 +459,7 @@ async def invite_team_member(member: TeamMemberCreate, current_user: dict = Depe
         email=member.email,
         name=member.name,
         role=member.role,
-        status="pending",
+        member_status="pending",
         created_at=member_doc["created_at"]
     )
 
@@ -477,7 +512,18 @@ async def get_organization_stats(current_user: dict = Depends(get_current_user))
 async def search_taric(request: TaricSearchRequest, current_user: dict = Depends(get_current_user)):
     """Search TARIC code using AI analysis with compliance checks"""
     
-    ai_result = await analyze_product_with_ai(request.product_description, request.origin_country)
+    # Validate required fields
+    if not request.origin_country:
+        raise HTTPException(status_code=400, detail="País de origen es obligatorio")
+    if not request.destination_country:
+        raise HTTPException(status_code=400, detail="País de destino es obligatorio")
+    
+    ai_result = await analyze_product_with_ai(
+        request.product_description, 
+        request.origin_country,
+        request.destination_country,
+        request.trade_agreements
+    )
     
     result_id = str(uuid.uuid4())
     
@@ -570,6 +616,12 @@ async def search_taric(request: TaricSearchRequest, current_user: dict = Depends
             "authority": "Comisión Europea - DG TAXUD"
         },
         {
+            "name": "Access2Markets",
+            "url": f"https://trade.ec.europa.eu/access-to-markets/es/search?product={ai_result.get('taric_code', '')[:6]}&origin={request.origin_country}&destination={request.destination_country}",
+            "description": "Portal oficial de la UE para requisitos de importación/exportación",
+            "authority": "Comisión Europea - DG TRADE"
+        },
+        {
             "name": "Agencia Tributaria - AEAT",
             "url": "https://www2.agenciatributaria.gob.es/ADUA/internet/es/aeat/dit/adu/adws/certificados/Taric.html",
             "description": "Consulta arancelaria oficial de España",
@@ -599,6 +651,7 @@ async def search_taric(request: TaricSearchRequest, current_user: dict = Depends
         organization_id=current_user.get("organization_id"),
         product_description=request.product_description,
         origin_country=request.origin_country,
+        destination_country=request.destination_country,
         client_reference=request.client_reference,
         taric_code=ai_result.get("taric_code", "0000000000"),
         taric_description=ai_result.get("description", ""),
@@ -611,6 +664,7 @@ async def search_taric(request: TaricSearchRequest, current_user: dict = Depends
         total_duty_estimate=ai_result.get("total_duty_estimate", "N/A"),
         vat_rate=ai_result.get("vat_rate", "21%"),
         preferential_duties=ai_result.get("preferential_duties"),
+        trade_agreements_applied=request.trade_agreements,
         official_sources=official_sources,
         ai_explanation=ai_result.get("explanation", ""),
         ai_confidence=ai_confidence,

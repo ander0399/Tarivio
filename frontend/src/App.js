@@ -4,6 +4,9 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import axios from "axios";
 import { Toaster, toast } from "sonner";
 
+// Contexts
+import { LanguageProvider } from "./contexts/LanguageContext";
+
 // Pages
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -101,39 +104,41 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="App">
-          <Toaster 
-            position="top-right" 
-            richColors 
-            closeButton
-            toastOptions={{
-              style: {
-                fontFamily: 'var(--font-body)',
-              },
-            }}
-          />
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              } 
+        <LanguageProvider>
+          <div className="App">
+            <Toaster 
+              position="top-right" 
+              richColors 
+              closeButton
+              toastOptions={{
+                style: {
+                  fontFamily: 'var(--font-body)',
+                },
+              }}
             />
-            <Route 
-              path="/result/:id" 
-              element={
-                <ProtectedRoute>
-                  <SearchResultPage />
-                </ProtectedRoute>
-              } 
-            />
-          </Routes>
-        </div>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/result/:id" 
+                element={
+                  <ProtectedRoute>
+                    <SearchResultPage />
+                  </ProtectedRoute>
+                } 
+              />
+            </Routes>
+          </div>
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, API } from "../App";
+import { useLanguage } from "../contexts/LanguageContext";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
@@ -29,12 +30,16 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
-  UserPlus
+  UserPlus,
+  MapPin,
+  Plane
 } from "lucide-react";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
@@ -52,18 +57,24 @@ import TaricCodeDisplay from "../components/TaricCodeDisplay";
 import DutyCalculatorCard from "../components/DutyCalculatorCard";
 import DocumentChecklist from "../components/DocumentChecklist";
 import ComplianceAlerts from "../components/ComplianceAlerts";
-import ExportPDF from "../components/ExportPDF";
 import RegulatoryAlertsPanel from "../components/RegulatoryAlertsPanel";
+import TradeAgreementsPanel from "../components/TradeAgreementsPanel";
+import LanguageSelector from "../components/LanguageSelector";
+import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
+import { findApplicableAgreements } from "../config/tradeAgreements";
 
 export default function DashboardPage() {
   const { user, token, logout } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [originCountry, setOriginCountry] = useState("");
+  const [destinationCountry, setDestinationCountry] = useState("ES"); // Default to Spain
   const [clientReference, setClientReference] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResult, setSearchResult] = useState(null);
+  const [tradeAgreements, setTradeAgreements] = useState([]);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [activeTab, setActiveTab] = useState("search");
@@ -75,24 +86,8 @@ export default function DashboardPage() {
   const [regulatoryAlerts, setRegulatoryAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
-  const countries = [
-    { code: "CN", name: "China" },
-    { code: "US", name: "Estados Unidos" },
-    { code: "MX", name: "México" },
-    { code: "BR", name: "Brasil" },
-    { code: "IN", name: "India" },
-    { code: "JP", name: "Japón" },
-    { code: "KR", name: "Corea del Sur" },
-    { code: "TW", name: "Taiwán" },
-    { code: "VN", name: "Vietnam" },
-    { code: "TH", name: "Tailandia" },
-    { code: "TR", name: "Turquía" },
-    { code: "GB", name: "Reino Unido" },
-    { code: "CL", name: "Chile" },
-    { code: "AR", name: "Argentina" },
-    { code: "MA", name: "Marruecos" },
-    { code: "OTHER", name: "Otro país" }
-  ];
+  // Group countries by region for better UX
+  const countriesByRegion = getCountriesByRegion();
 
   const examples = [
     "Aceite de oliva virgen extra en botella de vidrio",
@@ -162,21 +157,39 @@ export default function DashboardPage() {
   const handleSearch = async (e) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!originCountry) {
+      toast.error(t("messages.originRequired"));
+      return;
+    }
+    
+    if (!destinationCountry) {
+      toast.error(t("messages.destinationRequired"));
+      return;
+    }
+    
     if (!searchQuery.trim()) {
-      toast.error("Por favor describe el producto que quieres clasificar");
+      toast.error(t("messages.productRequired"));
       return;
     }
 
     setSearching(true);
     setSearchResult(null);
+    setTradeAgreements([]);
     
     try {
+      // Find applicable trade agreements
+      const agreements = findApplicableAgreements(originCountry, destinationCountry);
+      setTradeAgreements(agreements);
+      
       const response = await axios.post(
         `${API}/taric/search`,
         {
           product_description: searchQuery,
-          origin_country: originCountry || null,
-          client_reference: clientReference || null
+          origin_country: originCountry,
+          destination_country: destinationCountry,
+          client_reference: clientReference || null,
+          trade_agreements: agreements.map(a => a.name)
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -184,9 +197,9 @@ export default function DashboardPage() {
       setSearchResult(response.data);
       fetchHistory();
       fetchStats();
-      toast.success("Clasificación completada con éxito");
+      toast.success(t("messages.searchSuccess"));
     } catch (error) {
-      const message = error.response?.data?.detail || "Error al realizar la búsqueda";
+      const message = error.response?.data?.detail || t("messages.searchError");
       toast.error(message);
     } finally {
       setSearching(false);
@@ -201,7 +214,18 @@ export default function DashboardPage() {
       setSearchResult(response.data);
       setSearchQuery(response.data.product_description);
       setOriginCountry(response.data.origin_country || "");
+      setDestinationCountry(response.data.destination_country || "ES");
       setClientReference(response.data.client_reference || "");
+      
+      // Recalculate trade agreements
+      if (response.data.origin_country && response.data.destination_country) {
+        const agreements = findApplicableAgreements(
+          response.data.origin_country, 
+          response.data.destination_country
+        );
+        setTradeAgreements(agreements);
+      }
+      
       setActiveTab("search");
     } catch (error) {
       toast.error("Error al cargar el resultado");
@@ -288,6 +312,7 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-4">
+            <LanguageSelector />
             <div className="hidden md:flex items-center gap-2 text-gray-400 bg-[#0d1424] px-3 py-2 rounded-lg border border-cyan-500/10">
               <User className="w-4 h-4" />
               <span className="text-sm">{user?.name}</span>
@@ -300,7 +325,7 @@ export default function DashboardPage() {
             />
             <div className="flex items-center gap-2">
               <div className="status-dot" />
-              <span className="text-xs text-green-400 uppercase tracking-wider hidden sm:inline">Operativo</span>
+              <span className="text-xs text-green-400 uppercase tracking-wider hidden sm:inline">{t("dashboard.operational")}</span>
             </div>
             <Button 
               variant="ghost" 
@@ -461,29 +486,87 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                  <div className="grid md:grid-cols-3 gap-4 pt-4 border-t border-cyan-500/10">
+                  <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-cyan-500/10">
+                    {/* Origin Country - REQUIRED */}
                     <div>
-                      <label className="label-cyber block mb-2">
-                        País de origen
+                      <label className="label-cyber block mb-2 flex items-center gap-2">
+                        <MapPin className="w-3 h-3" />
+                        {t("dashboard.origin")}
+                        <span className="text-red-400 text-[10px] ml-1">* {t("dashboard.originRequired")}</span>
                       </label>
-                      <Select value={originCountry} onValueChange={(val) => setOriginCountry(val === "NONE" ? "" : val)}>
-                        <SelectTrigger className="input-cyber h-12" data-testid="country-select">
-                          <SelectValue placeholder="Seleccionar país (opcional)" />
+                      <Select value={originCountry} onValueChange={setOriginCountry}>
+                        <SelectTrigger className={`input-cyber h-12 ${!originCountry ? 'border-red-500/30' : ''}`} data-testid="origin-country-select">
+                          <SelectValue placeholder={t("dashboard.selectCountry")} />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#0d1424] border-cyan-500/30">
-                          <SelectItem value="NONE" className="text-gray-400">Sin especificar</SelectItem>
-                          {countries.map((country) => (
-                            <SelectItem key={country.code} value={country.code} className="text-white hover:bg-cyan-500/10">
-                              {country.name}
-                            </SelectItem>
+                        <SelectContent className="bg-[#0d1424] border-cyan-500/30 max-h-[300px]">
+                          {REGION_ORDER.map((region) => (
+                            countriesByRegion[region] && (
+                              <SelectGroup key={region}>
+                                <SelectLabel className="text-cyan-400 text-xs uppercase tracking-wider px-2 py-1">
+                                  {region}
+                                </SelectLabel>
+                                {countriesByRegion[region].map((country) => (
+                                  <SelectItem 
+                                    key={country.code} 
+                                    value={country.code} 
+                                    className="text-white hover:bg-cyan-500/10"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span>{country.flag}</span>
+                                      <span>{country.name}</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     
+                    {/* Destination Country - REQUIRED */}
+                    <div>
+                      <label className="label-cyber block mb-2 flex items-center gap-2">
+                        <Plane className="w-3 h-3" />
+                        {t("dashboard.destination")}
+                        <span className="text-red-400 text-[10px] ml-1">* {t("dashboard.destinationRequired")}</span>
+                      </label>
+                      <Select value={destinationCountry} onValueChange={setDestinationCountry}>
+                        <SelectTrigger className={`input-cyber h-12 ${!destinationCountry ? 'border-red-500/30' : ''}`} data-testid="destination-country-select">
+                          <SelectValue placeholder={t("dashboard.selectCountry")} />
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#0d1424] border-cyan-500/30 max-h-[300px]">
+                          {REGION_ORDER.map((region) => (
+                            countriesByRegion[region] && (
+                              <SelectGroup key={region}>
+                                <SelectLabel className="text-cyan-400 text-xs uppercase tracking-wider px-2 py-1">
+                                  {region}
+                                </SelectLabel>
+                                {countriesByRegion[region].map((country) => (
+                                  <SelectItem 
+                                    key={country.code} 
+                                    value={country.code} 
+                                    className="text-white hover:bg-cyan-500/10"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span>{country.flag}</span>
+                                      <span>{country.name}</span>
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Second row: Reference and Submit */}
+                  <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label className="label-cyber block mb-2">
-                        Referencia cliente (B2B)
+                        {t("dashboard.clientReference")}
                       </label>
                       <input
                         type="text"
@@ -499,7 +582,7 @@ export default function DashboardPage() {
                       <Button
                         type="submit"
                         className="btn-cyber w-full h-12"
-                        disabled={searching}
+                        disabled={searching || !originCountry || !destinationCountry}
                         data-testid="search-submit"
                       >
                         {searching ? (
@@ -526,15 +609,24 @@ export default function DashboardPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {/* Header with confidence and export */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold">Resultado de Clasificación</h3>
+                  {/* Header with confidence and route info */}
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <h3 className="text-xl font-bold">{t("results.title")}</h3>
                     <div className="flex items-center gap-4">
+                      {/* Route indicator */}
+                      {originCountry && destinationCountry && (
+                        <div className="flex items-center gap-2 bg-[#0d1424] px-3 py-2 rounded-lg border border-cyan-500/20">
+                          <span className="text-sm">{getCountryByCode(originCountry)?.flag}</span>
+                          <span className="text-gray-400 text-sm">{getCountryByCode(originCountry)?.name}</span>
+                          <ArrowRight className="w-4 h-4 text-cyan-400" />
+                          <span className="text-sm">{getCountryByCode(destinationCountry)?.flag}</span>
+                          <span className="text-gray-400 text-sm">{getCountryByCode(destinationCountry)?.name}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 uppercase">Confianza IA:</span>
+                        <span className="text-xs text-gray-500 uppercase">{t("results.confidence")}</span>
                         <span className="text-cyan-400 font-mono font-bold">{searchResult.ai_confidence}</span>
                       </div>
-                      <ExportPDF result={searchResult} />
                     </div>
                   </div>
 
@@ -543,9 +635,16 @@ export default function DashboardPage() {
                     <ComplianceAlerts alerts={searchResult.compliance_alerts} />
                   )}
 
+                  {/* Trade Agreements Panel - NEW */}
+                  <TradeAgreementsPanel 
+                    agreements={tradeAgreements}
+                    originCountry={originCountry}
+                    destinationCountry={destinationCountry}
+                  />
+
                   {/* TARIC Code */}
                   <div className="cyber-card p-6">
-                    <h3 className="label-cyber mb-4">Código TARIC Identificado</h3>
+                    <h3 className="label-cyber mb-4">{t("results.taricCode")}</h3>
                     <TaricCodeDisplay 
                       code={searchResult.taric_code}
                       chapter={searchResult.chapter}
@@ -561,7 +660,7 @@ export default function DashboardPage() {
                       <div className="flex gap-3">
                         <AlertCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="label-cyber mb-2">Análisis y Fundamentación</h4>
+                          <h4 className="label-cyber mb-2">{t("results.analysis")}</h4>
                           <p className="text-gray-400 text-sm leading-relaxed">
                             {searchResult.ai_explanation}
                           </p>
@@ -591,7 +690,7 @@ export default function DashboardPage() {
                     <div className="cyber-card p-6">
                       <h3 className="label-cyber mb-4 flex items-center gap-2">
                         <Globe className="w-4 h-4" />
-                        Fuentes Oficiales Consultadas
+                        {t("results.sources")}
                       </h3>
                       <div className="space-y-3">
                         {searchResult.official_sources.map((source, index) => (
@@ -805,8 +904,8 @@ export default function DashboardPage() {
                         {member.role}
                       </span>
                       <span className="flex items-center gap-1 text-xs text-gray-500">
-                        <div className={`w-2 h-2 rounded-full ${member.status === 'active' ? 'bg-green-400' : 'bg-amber-400'}`} />
-                        {member.status}
+                        <div className={`w-2 h-2 rounded-full ${member.member_status === 'active' ? 'bg-green-400' : 'bg-amber-400'}`} />
+                        {member.member_status}
                       </span>
                       {member.id !== user?.id && (
                         <Button

@@ -1,5 +1,4 @@
-import { FileCheck, Leaf, FileText, Shield, CheckCircle2, AlertTriangle, ExternalLink, Building, Download, Clock, FileDown, Globe } from "lucide-react";
-import { Button } from "./ui/button";
+import { FileCheck, Leaf, FileText, Shield, CheckCircle2, AlertTriangle, ExternalLink, Building, Clock } from "lucide-react";
 
 export const DocumentChecklist = ({ documents = [] }) => {
   const getTypeIcon = (type) => {
@@ -98,34 +97,19 @@ export const DocumentChecklist = ({ documents = [] }) => {
         )}
       </div>
 
-      {/* PDF and Links Section */}
+      {/* Official Link only - no PDF downloads */}
       <div className="ml-6 flex flex-wrap gap-2">
-        {doc.pdf_form && (
+        {doc.official_link && (
           <a
-            href={doc.pdf_form}
+            href={doc.official_link}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/40 rounded text-xs text-cyan-400 hover:bg-cyan-500/30 transition-colors"
-            data-testid={`pdf-form-${index}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1424] border border-[rgba(0,212,255,0.2)] rounded text-xs text-gray-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
           >
-            <FileDown className="w-3.5 h-3.5" />
-            Formulario PDF
+            <ExternalLink className="w-3.5 h-3.5" />
+            Información oficial
           </a>
         )}
-        
-        {doc.pdf_guide && (
-          <a
-            href={doc.pdf_guide}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 rounded text-xs text-amber-400 hover:bg-amber-500/30 transition-colors"
-            data-testid={`pdf-guide-${index}`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            Guía PDF
-          </a>
-        )}
-        
         {doc.online_portal && (
           <a
             href={doc.online_portal}
@@ -134,20 +118,8 @@ export const DocumentChecklist = ({ documents = [] }) => {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-400 hover:bg-green-500/30 transition-colors"
             data-testid={`online-portal-${index}`}
           >
-            <Globe className="w-3.5 h-3.5" />
-            Tramitar Online
-          </a>
-        )}
-        
-        {doc.official_link && !doc.pdf_form && !doc.online_portal && (
-          <a
-            href={doc.official_link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0d1424] border border-[rgba(0,212,255,0.2)] rounded text-xs text-gray-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
-          >
             <ExternalLink className="w-3.5 h-3.5" />
-            Más información
+            Tramitar Online
           </a>
         )}
       </div>
@@ -158,7 +130,7 @@ export const DocumentChecklist = ({ documents = [] }) => {
     <div className="cyber-card p-6 h-full">
       <h3 className="label-cyber mb-4 flex items-center gap-2">
         <FileCheck className="w-4 h-4" />
-        Documentación Requerida con PDFs Oficiales
+        Documentación Requerida
       </h3>
       
       {documents.length > 0 ? (
@@ -223,7 +195,7 @@ export const DocumentChecklist = ({ documents = [] }) => {
 
       {/* Official sources */}
       <div className="mt-3 text-xs text-gray-500">
-        <span>PDFs de fuentes oficiales: </span>
+        <span>Fuentes oficiales: </span>
         <a href="https://www.mapa.gob.es/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">MAPA</a>
         {" · "}
         <a href="https://sede.agenciatributaria.gob.es/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">AEAT</a>
