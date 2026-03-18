@@ -47,7 +47,9 @@ export const MarketStudyPanel = ({
       
       // Create AbortController for timeout handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
+      
+      console.log("Generating market study for:", productDescription, originCountry, "->", destinationCountry);
       
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/market/study`, {
         method: "POST",
@@ -67,17 +69,31 @@ export const MarketStudyPanel = ({
 
       clearTimeout(timeoutId);
 
-      const data = await response.json();
+      // Read response as text first to avoid "body stream already read" error
+      const responseText = await response.text();
+      console.log("Market study response received, length:", responseText.length, "status:", response.status);
+      
+      // Parse the text as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError, "Response text:", responseText.substring(0, 500));
+        throw new Error("Error al procesar la respuesta del servidor. Intenta de nuevo.");
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || "Error al generar el estudio de mercado");
+        console.error("API error response:", data);
+        throw new Error(data.detail || data.message || "Error al generar el estudio de mercado");
       }
 
       // Validate response has expected data
       if (!data.executive_summary && !data.pestel) {
-        throw new Error("El estudio de mercado no contiene datos válidos");
+        console.error("Invalid market study response:", data);
+        throw new Error("El estudio de mercado no contiene datos válidos. Intenta de nuevo.");
       }
 
+      console.log("Market study generated successfully");
       setStudy(data);
 
       if (onGenerateStudy) {
@@ -87,6 +103,8 @@ export const MarketStudyPanel = ({
       console.error("Market study error:", err);
       if (err.name === 'AbortError') {
         setError("La generación del estudio tardó demasiado. Por favor intenta de nuevo.");
+      } else if (err.message.includes("body stream")) {
+        setError("Error de comunicación con el servidor. Por favor intenta de nuevo.");
       } else {
         setError(err.message || "Error al procesar la solicitud");
       }

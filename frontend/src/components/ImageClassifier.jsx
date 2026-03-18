@@ -56,6 +56,41 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setIsDragging(false);
   };
 
+  // Compress image before sending to reduce size and improve performance
+  const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        let { width, height } = img;
+        
+        // Scale down if larger than maxWidth
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw image on canvas
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Get compressed base64
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+        console.log(`Image compressed: original ${file.size} bytes, compressed base64 length: ${compressedBase64.length}`);
+        resolve(compressedBase64);
+      };
+      
+      img.onerror = () => reject(new Error("Error al procesar la imagen"));
+      
+      // Create object URL from file
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   const analyzeImage = async () => {
     if (!image) return;
     
@@ -63,18 +98,27 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setError(null);
     
     try {
-      // Convert image to base64
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error("Error al leer la imagen"));
-        reader.readAsDataURL(image);
-      });
+      // Compress image to reduce size and ensure consistent format
+      let base64;
+      try {
+        base64 = await compressImage(image);
+      } catch (compressError) {
+        console.error("Compression failed, falling back to original:", compressError);
+        // Fallback to original file
+        base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Error al leer la imagen"));
+          reader.readAsDataURL(image);
+        });
+      }
       
       // Validate base64 result
       if (!base64 || !base64.includes("base64,")) {
         throw new Error("Error al procesar la imagen");
       }
+      
+      console.log("Sending image to API, base64 length:", base64.length);
       
       const token = localStorage.getItem("token");
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/image/analyze`, {
@@ -86,17 +130,31 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
         body: JSON.stringify({ image_base64: base64 })
       });
       
-      const data = await response.json();
+      // Read the response text first to avoid "body stream already read" error
+      const responseText = await response.text();
+      console.log("Response received, length:", responseText.length, "status:", response.status);
+      
+      // Parse the text as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error("JSON parse error:", jsonError, "Response text:", responseText.substring(0, 500));
+        throw new Error("Error al procesar la respuesta del servidor. Intenta de nuevo.");
+      }
       
       if (!response.ok) {
-        throw new Error(data.detail || "Error al analizar la imagen");
+        console.error("API error response:", data);
+        throw new Error(data.detail || data.message || "Error al analizar la imagen");
       }
       
       // Validate response has expected data
       if (!data.product_description) {
+        console.error("Invalid response data:", data);
         throw new Error("La respuesta no contiene descripción del producto");
       }
       
+      console.log("Image analysis successful:", data.product_description.substring(0, 100));
       setAnalysisResult(data);
       
       if (onProductIdentified) {
@@ -104,7 +162,14 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
       }
     } catch (err) {
       console.error("Image analysis error:", err);
-      setError(err.message || "Error al procesar la imagen. Por favor intenta con otra imagen.");
+      // More specific error messages
+      if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
+        setError("Error de conexión. Verifica tu internet e intenta de nuevo.");
+      } else if (err.message.includes("body stream")) {
+        setError("Error de comunicación con el servidor. Por favor intenta de nuevo.");
+      } else {
+        setError(err.message || "Error al procesar la imagen. Por favor intenta con otra imagen.");
+      }
     } finally {
       setAnalyzing(false);
     }

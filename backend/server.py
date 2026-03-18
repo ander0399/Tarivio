@@ -1278,7 +1278,7 @@ Por favor proporciona un análisis completo incluyendo PESTEL, tamaño de mercad
         response = await chat.send_message(user_message)
         logger.info(f"Market study response received, length: {len(response)}")
         
-        # Parse response
+        # Parse response with robust error handling
         import json
         import re
         clean_response = response.strip()
@@ -1288,24 +1288,75 @@ Por favor proporciona un análisis completo incluyendo PESTEL, tamaño de mercad
             clean_response = clean_response.split("```json")[1].split("```")[0]
         elif "```" in clean_response:
             parts = clean_response.split("```")
-            if len(parts) > 1:
-                clean_response = parts[1]
+            for part in parts:
+                part = part.strip()
+                if part.startswith("{"):
+                    clean_response = part
+                    break
         
         clean_response = clean_response.strip()
         
+        # Remove any trailing text after the JSON object
+        brace_count = 0
+        json_end = 0
+        in_string = False
+        escape_next = False
+        
+        for i, char in enumerate(clean_response):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if not in_string:
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        json_end = i + 1
+                        break
+        
+        if json_end > 0:
+            clean_response = clean_response[:json_end]
+        
+        result = None
+        parse_error = None
+        
+        # Try multiple parsing strategies
         try:
             result = json.loads(clean_response)
         except json.JSONDecodeError as je:
-            logger.error(f"JSON parse error: {je}, trying regex extraction")
-            # Try to extract JSON object
-            json_match = re.search(r'\{.*\}', clean_response, re.DOTALL)
-            if json_match:
-                try:
+            parse_error = je
+            logger.warning(f"First JSON parse attempt failed: {je}")
+            
+            # Strategy 2: Try to find JSON object with regex
+            try:
+                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', clean_response, re.DOTALL)
+                if json_match:
                     result = json.loads(json_match.group())
-                except:
-                    raise HTTPException(status_code=500, detail="Error al procesar respuesta del estudio de mercado")
-            else:
-                raise HTTPException(status_code=500, detail="Error al generar el estudio de mercado")
+            except Exception as e2:
+                logger.warning(f"Regex JSON extraction failed: {e2}")
+            
+            # Strategy 3: Try to fix common JSON issues
+            if result is None:
+                try:
+                    # Replace single quotes with double quotes
+                    fixed = clean_response.replace("'", '"')
+                    # Fix trailing commas
+                    fixed = re.sub(r',\s*}', '}', fixed)
+                    fixed = re.sub(r',\s*]', ']', fixed)
+                    result = json.loads(fixed)
+                except Exception as e3:
+                    logger.warning(f"Fixed JSON parse failed: {e3}")
+        
+        if result is None:
+            logger.error(f"All JSON parsing attempts failed. Raw response: {clean_response[:500]}")
+            raise HTTPException(status_code=500, detail="Error al procesar la respuesta de IA. Por favor intenta de nuevo.")
         
         study_id = str(uuid.uuid4())
         
