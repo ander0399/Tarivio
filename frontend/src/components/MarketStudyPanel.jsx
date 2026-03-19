@@ -48,7 +48,7 @@ export const MarketStudyPanel = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("taric_token");
       
       console.log("Generating market study for:", productDescription, originCountry, "->", destinationCountry);
       

@@ -136,7 +136,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
       }
       
       // Step 2: Send to API using axios with specific config
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("taric_token");
       
       const response = await axios({
         method: 'POST',
