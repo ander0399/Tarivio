@@ -1,8 +1,11 @@
 import { useState, useRef } from "react";
-import { Camera, Upload, ImageIcon, Loader2, CheckCircle2, X, Sparkles } from "lucide-react";
+import { Camera, Upload, ImageIcon, Loader2, CheckCircle2, X, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { useLanguage } from "../contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 export const ImageClassifier = ({ onProductIdentified, onUseForClassification }) => {
   const { t } = useLanguage();
@@ -12,6 +15,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
   const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const fileInputRef = useRef(null);
 
   const handleFileSelect = (file) => {
@@ -33,6 +37,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setError(null);
     setImage(file);
     setAnalysisResult(null);
+    setRetryCount(0);
     
     // Create preview
     const reader = new FileReader();
@@ -56,37 +61,50 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setIsDragging(false);
   };
 
-  // Compress image before sending to reduce size and improve performance
-  const compressImage = (file, maxWidth = 1200, quality = 0.8) => {
+  // Compress image using canvas to reduce size and ensure consistent format
+  const compressImage = (file) => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
       
+      const timeout = setTimeout(() => {
+        reject(new Error("Timeout comprimiendo imagen"));
+      }, 10000);
+      
       img.onload = () => {
-        let { width, height } = img;
+        clearTimeout(timeout);
         
-        // Scale down if larger than maxWidth
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+        let { width, height } = img;
+        const maxWidth = 1024;
+        const maxHeight = 1024;
+        
+        // Scale down if needed
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
         }
         
         canvas.width = width;
         canvas.height = height;
-        
-        // Draw image on canvas
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Get compressed base64
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-        console.log(`Image compressed: original ${file.size} bytes, compressed base64 length: ${compressedBase64.length}`);
+        // Get compressed base64 as JPEG
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        
+        // Cleanup
+        URL.revokeObjectURL(img.src);
+        
         resolve(compressedBase64);
       };
       
-      img.onerror = () => reject(new Error("Error al procesar la imagen"));
+      img.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(img.src);
+        reject(new Error("Error cargando imagen"));
+      };
       
-      // Create object URL from file
       img.src = URL.createObjectURL(file);
     });
   };
@@ -98,81 +116,97 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setError(null);
     
     try {
-      // Compress image to reduce size and ensure consistent format
+      // Step 1: Compress the image
       let base64;
       try {
         base64 = await compressImage(image);
       } catch (compressError) {
-        console.error("Compression failed, falling back to original:", compressError);
-        // Fallback to original file
+        console.warn("Compression failed, using original:", compressError);
+        // Fallback to original
         base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
-          reader.onerror = () => reject(new Error("Error al leer la imagen"));
+          reader.onerror = () => reject(new Error("Error leyendo imagen"));
           reader.readAsDataURL(image);
         });
       }
       
-      // Validate base64 result
       if (!base64 || !base64.includes("base64,")) {
-        throw new Error("Error al procesar la imagen");
+        throw new Error("Error procesando la imagen");
       }
       
-      console.log("Sending image to API, base64 length:", base64.length);
-      
+      // Step 2: Send to API using axios with specific config
       const token = localStorage.getItem("token");
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/image/analyze`, {
-        method: "POST",
+      
+      const response = await axios({
+        method: 'POST',
+        url: `${API}/api/image/analyze`,
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ image_base64: base64 })
+        data: { image_base64: base64 },
+        timeout: 90000, // 90 seconds
+        validateStatus: (status) => status < 500, // Don't throw on 4xx
+        transformResponse: [(data) => {
+          // Parse JSON manually to handle errors
+          try {
+            return typeof data === 'string' ? JSON.parse(data) : data;
+          } catch (e) {
+            console.error("JSON parse error:", e);
+            return { error: "Invalid JSON response" };
+          }
+        }]
       });
       
-      // Read the response text first to avoid "body stream already read" error
-      const responseText = await response.text();
-      console.log("Response received, length:", responseText.length, "status:", response.status);
-      
-      // Parse the text as JSON
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error("JSON parse error:", jsonError, "Response text:", responseText.substring(0, 500));
-        throw new Error("Error al procesar la respuesta del servidor. Intenta de nuevo.");
+      // Check for errors
+      if (response.status >= 400) {
+        const errorMsg = response.data?.detail || response.data?.message || "Error del servidor";
+        throw new Error(errorMsg);
       }
       
-      if (!response.ok) {
-        console.error("API error response:", data);
-        throw new Error(data.detail || data.message || "Error al analizar la imagen");
+      if (response.data?.error) {
+        throw new Error(response.data.error);
       }
       
-      // Validate response has expected data
-      if (!data.product_description) {
-        console.error("Invalid response data:", data);
-        throw new Error("La respuesta no contiene descripción del producto");
+      // Validate response
+      if (!response.data?.product_description) {
+        console.error("Invalid response:", response.data);
+        throw new Error("La respuesta no contiene la descripción del producto");
       }
       
-      console.log("Image analysis successful:", data.product_description.substring(0, 100));
-      setAnalysisResult(data);
+      // Success!
+      setAnalysisResult(response.data);
+      setRetryCount(0);
       
       if (onProductIdentified) {
-        onProductIdentified(data);
+        onProductIdentified(response.data);
       }
+      
     } catch (err) {
       console.error("Image analysis error:", err);
-      // More specific error messages
-      if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
-        setError("Error de conexión. Verifica tu internet e intenta de nuevo.");
-      } else if (err.message.includes("body stream")) {
-        setError("Error de comunicación con el servidor. Por favor intenta de nuevo.");
-      } else {
-        setError(err.message || "Error al procesar la imagen. Por favor intenta con otra imagen.");
+      
+      let errorMessage = "Error al analizar la imagen.";
+      
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        errorMessage = "La solicitud tardó demasiado. Intenta con una imagen más pequeña.";
+      } else if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
+        errorMessage = "Error de conexión. Verifica tu internet.";
+      } else if (err.response?.status === 401) {
+        errorMessage = "Sesión expirada. Por favor inicia sesión de nuevo.";
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+      
+      setError(errorMessage);
+      setRetryCount(prev => prev + 1);
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleRetry = () => {
+    analyzeImage();
   };
 
   const handleUseForClassification = () => {
@@ -186,6 +220,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
     setImagePreview(null);
     setAnalysisResult(null);
     setError(null);
+    setRetryCount(0);
   };
 
   return (
@@ -232,19 +267,17 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
                 <p className="text-gray-300 mb-1">{t("imageClassifier.dragDrop")}</p>
                 <p className="text-gray-500 text-sm">{t("imageClassifier.supportedFormats")}</p>
               </div>
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  className="btn-cyber h-10 px-4 text-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {t("imageClassifier.uploadBtn")}
-                </Button>
-              </div>
+              <Button
+                type="button"
+                className="btn-cyber h-10 px-4 text-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {t("imageClassifier.uploadBtn")}
+              </Button>
             </div>
           </motion.div>
         ) : (
@@ -289,7 +322,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5 mr-2" />
-                    {t("imageClassifier.analyzing").replace("...", "")}
+                    Analizar Imagen
                   </>
                 )}
               </Button>
@@ -334,7 +367,7 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">
                       Categoría sugerida
                     </p>
-                    <p className="text-cyan-400 font-mono">
+                    <p className="text-cyan-400 font-mono text-sm">
                       {analysisResult.suggested_category}
                     </p>
                   </div>
@@ -354,14 +387,27 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
         )}
       </AnimatePresence>
 
-      {/* Error Message */}
+      {/* Error Message with Retry */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+          className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg"
         >
-          {error}
+          <p className="text-red-400 text-sm mb-2">{error}</p>
+          {retryCount < 3 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              onClick={handleRetry}
+              disabled={analyzing}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reintentar ({3 - retryCount} intentos restantes)
+            </Button>
+          )}
         </motion.div>
       )}
     </div>

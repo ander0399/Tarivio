@@ -14,12 +14,16 @@ import {
   AlertTriangle,
   Lightbulb,
   FileText,
-  Globe
+  Globe,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useLanguage } from "../contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsPDF } from "jspdf";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL;
 
 export const MarketStudyPanel = ({ 
   productDescription, 
@@ -32,6 +36,7 @@ export const MarketStudyPanel = ({
   const [generating, setGenerating] = useState(false);
   const [study, setStudy] = useState(null);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const generateStudy = async () => {
     if (!productDescription || !originCountry || !destinationCountry) {
@@ -45,72 +50,81 @@ export const MarketStudyPanel = ({
     try {
       const token = localStorage.getItem("token");
       
-      // Create AbortController for timeout handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
-      
       console.log("Generating market study for:", productDescription, originCountry, "->", destinationCountry);
       
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/market/study`, {
-        method: "POST",
+      const response = await axios({
+        method: 'POST',
+        url: `${API}/api/market/study`,
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
+        data: {
           product_description: productDescription,
           taric_code: taricCode,
           origin_country: originCountry,
           destination_country: destinationCountry,
           language: language
-        }),
-        signal: controller.signal
+        },
+        timeout: 180000, // 3 minutes
+        validateStatus: (status) => status < 500,
+        transformResponse: [(data) => {
+          try {
+            return typeof data === 'string' ? JSON.parse(data) : data;
+          } catch (e) {
+            console.error("JSON parse error:", e);
+            return { error: "Invalid JSON response" };
+          }
+        }]
       });
 
-      clearTimeout(timeoutId);
-
-      // Read response as text first to avoid "body stream already read" error
-      const responseText = await response.text();
-      console.log("Market study response received, length:", responseText.length, "status:", response.status);
-      
-      // Parse the text as JSON
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error("JSON parse error:", jsonError, "Response text:", responseText.substring(0, 500));
-        throw new Error("Error al procesar la respuesta del servidor. Intenta de nuevo.");
+      // Check for errors
+      if (response.status >= 400) {
+        const errorMsg = response.data?.detail || response.data?.message || "Error del servidor";
+        throw new Error(errorMsg);
       }
 
-      if (!response.ok) {
-        console.error("API error response:", data);
-        throw new Error(data.detail || data.message || "Error al generar el estudio de mercado");
+      if (response.data?.error) {
+        throw new Error(response.data.error);
       }
 
       // Validate response has expected data
-      if (!data.executive_summary && !data.pestel) {
-        console.error("Invalid market study response:", data);
-        throw new Error("El estudio de mercado no contiene datos válidos. Intenta de nuevo.");
+      if (!response.data?.executive_summary && !response.data?.pestel) {
+        console.error("Invalid market study response:", response.data);
+        throw new Error("El estudio no contiene datos válidos. Intenta de nuevo.");
       }
 
       console.log("Market study generated successfully");
-      setStudy(data);
+      setStudy(response.data);
+      setRetryCount(0);
 
       if (onGenerateStudy) {
-        onGenerateStudy(data);
+        onGenerateStudy(response.data);
       }
     } catch (err) {
       console.error("Market study error:", err);
-      if (err.name === 'AbortError') {
-        setError("La generación del estudio tardó demasiado. Por favor intenta de nuevo.");
-      } else if (err.message.includes("body stream")) {
-        setError("Error de comunicación con el servidor. Por favor intenta de nuevo.");
-      } else {
-        setError(err.message || "Error al procesar la solicitud");
+      
+      let errorMessage = "Error al generar el estudio de mercado.";
+      
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        errorMessage = "La generación tardó demasiado. Intenta de nuevo.";
+      } else if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
+        errorMessage = "Error de conexión. Verifica tu internet.";
+      } else if (err.response?.status === 401) {
+        errorMessage = "Sesión expirada. Por favor inicia sesión de nuevo.";
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+      
+      setError(errorMessage);
+      setRetryCount(prev => prev + 1);
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleRetry = () => {
+    generateStudy();
   };
 
   const downloadPDF = () => {
@@ -417,8 +431,21 @@ export const MarketStudyPanel = ({
       </div>
 
       {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
-          {error}
+        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg mb-4">
+          <p className="text-red-400 text-sm mb-2">{error}</p>
+          {retryCount < 3 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              onClick={handleRetry}
+              disabled={generating}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reintentar ({3 - retryCount} intentos restantes)
+            </Button>
+          )}
         </div>
       )}
 
