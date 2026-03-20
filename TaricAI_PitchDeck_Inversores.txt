@@ -1,0 +1,415 @@
+TARICAI - PITCH DECK PARA INVERSORES
+================================================================================
+Pre-Seed 2026 | Madrid, España
+hola@taricai.es | taricai.es
+================================================================================
+
+
+================================================================================
+SLIDE 1: PORTADA
+================================================================================
+
+                              TaricAI
+          El Primer Agente IA para Clasificación Arancelaria en España
+
+     "Transformamos un proceso de 3-5 horas en menos de 30 segundos"
+
+
+CIFRAS CLAVE:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  €424B              94,000            €30K+             <30 seg           │
+│  Importaciones      Infracciones      Sanción media     Tiempo            │
+│  España/año         AEAT 2023         por error         clasificación     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SLIDE 2: EL PROBLEMA
+================================================================================
+
+Un proceso crítico que sigue siendo manual y fragmentado
+
+
+PROCESO ACTUAL DE UN AGENTE DE ADUANAS:
+
+1. Consultar TARIC UE (partida 10 dígitos)
+2. Verificar CLASS (AEAT) medidas nacionales
+3. Consultar MAPA (requisitos fitosanitarios)
+4. Verificar TRACES (notificación previa)
+5. Revisar SOIVRE (productos agroalimentarios)
+6. Calcular aranceles, IVA, antidumping
+7. Consultar EUR-Lex (reglamentos específicos)
+8. Calcular Landed Cost final
+
+
+IMPACTO DEL PROBLEMA:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│    3-5 HORAS          6+ FUENTES           30-50 HORAS                     │
+│    Por operación      oficiales a          Trabajo manual                  │
+│    de importación     consultar            semanal por agente              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+¿POR QUÉ PERSISTE EL PROBLEMA?
+
+→ Dispersión de fuentes: Ninguna herramienta unifica todas las fuentes
+→ Ausencia de IA conversacional: Las herramientas existentes son manuales
+→ Módulo fitosanitario ignorado: MAPA, TRACES, SOIVRE ausentes
+→ Barrera de precio: Soluciones enterprise excluyen a PYMEs
+
+
+================================================================================
+SLIDE 3: LA SOLUCIÓN
+================================================================================
+
+Un agente de IA que automatiza todo el proceso
+
+
+MÓDULOS FUNCIONALES:
+
+┌─────────────────────┬──────────────────────┬─────────────────────┐
+│  CLASIFICADOR       │  CALCULADOR          │  CONTROL            │
+│  TARIC              │  DE TRIBUTOS         │  FITOSANITARIO      │
+├─────────────────────┼──────────────────────┼─────────────────────┤
+│  Partida 10 dígitos │  Aranceles, IVA      │  MAPA, TRACES       │
+│  desde texto o      │  Impuestos especiales│  SOIVRE, RAPEX      │
+│  imagen. >90%       │  Antidumping         │  Control CITES      │
+│  precisión          │  Acuerdos preferenc. │                     │
+└─────────────────────┴──────────────────────┴─────────────────────┘
+
+┌─────────────────────┬──────────────────────┬─────────────────────┐
+│  LANDED COST        │  GESTIÓN             │  AGENTE             │
+│                     │  DOCUMENTAL          │  CONVERSACIONAL     │
+├─────────────────────┼──────────────────────┼─────────────────────┤
+│  FOB + flete +      │  Checklist auto:     │  Interfaz español   │
+│  seguro + aranceles │  DUA, EUR.1,         │  Orquesta módulos   │
+│  + IVA + tasas      │  certificados        │  en una consulta    │
+│  portuarias reales  │  origen, T2L         │  Historial completo │
+└─────────────────────┴──────────────────────┴─────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│              DE 3-5 HORAS A MENOS DE 30 SEGUNDOS                           │
+│                                                                             │
+│     Una única consulta conversacional para toda la información             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SLIDE 4: OPORTUNIDAD DE MERCADO
+================================================================================
+
+Un mercado grande con necesidad clara de automatización
+
+
+TAM / SAM / SOM:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  TAM  │  €12M     │  Software aduanero Europa (6,000+ empresas)            │
+│  SAM  │  €3.6M    │  España + Latinoamérica (1,800+ empresas)              │
+│  SOM  │  €360K    │  Objetivo Año 3 (150 clientes × €2,400/año)            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+SEGMENTOS TARGET:
+
+AGENCIAS DE ADUANAS (Segmento primario)
+────────────────────────────────────────
+• 1,200+ agencias activas en España
+• Usuarios intensivos: 10-100 operaciones/día
+• Perfil: Empresas de 2-50 personas
+• Alta carga operativa, sensibles a eficiencia
+
+PYMES IMPORTADORAS (Segmento secundario)
+────────────────────────────────────────
+• 50,000+ empresas con importaciones regulares
+• Pre-clasificaciones y cálculo de costes
+• Perfil: 10-250 empleados
+• Reducir dependencia de terceros
+
+
+EXPANSIÓN GEOGRÁFICA:
+
+Fase 1 → España (2026)
+Fase 2 → Latinoamérica: Colombia, México, Perú, Chile (2027)
+Fase 3 → Resto UE: Portugal, Francia, Italia (2028+)
+
+
+================================================================================
+SLIDE 5: ANÁLISIS COMPETITIVO
+================================================================================
+
+Posición única en el mercado español
+
+
+COMPARATIVA DE COMPETIDORES:
+
+┌────────────────┬─────────┬─────────────┬─────────┬──────────┬───────────┐
+│ Competidor     │ Origen  │ IA          │ Español │ Fuentes  │ Precio    │
+│                │         │             │         │ ES       │ PYME      │
+├────────────────┼─────────┼─────────────┼─────────┼──────────┼───────────┤
+│ TaricAI        │ España  │ ✓ Convers.  │ ✓       │ ✓        │ ✓ €99-499 │
+│ dbTaric        │ España  │ ✗ Manual    │ ✓       │ Parcial  │ ✓         │
+│ Digicust       │ Austria │ ✓ Avanzada  │ ✗ Inglés│ ✗        │ ✓ €149-499│
+│ MIC-CUST       │ Alemania│ ✓           │ ✗       │ ✗        │ ✗ Enterpr.│
+│ Avalara        │ USA     │ Parcial     │ Parcial │ ✗        │ ✗ Enterpr.│
+│ Descartes      │ Canadá  │ Parcial     │ Parcial │ ✗        │ ✗ Enterpr.│
+└────────────────┴─────────┴─────────────┴─────────┴──────────┴───────────┘
+
+
+VENTAJA COMPETITIVA ÚNICA:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  Único agente IA conversacional en español con fuentes oficiales           │
+│  españolas integradas (AEAT, MAPA, TRACES, SOIVRE) y precio                │
+│  accesible para PYMEs.                                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SLIDE 6: MODELO DE NEGOCIO
+================================================================================
+
+SaaS con suscripción mensual escalable
+
+
+ESTRUCTURA DE PRECIOS:
+
+┌─────────────────┬───────────┬─────────────┬─────────────────────────────────┐
+│ Plan            │ €/mes     │ Operaciones │ Target                          │
+├─────────────────┼───────────┼─────────────┼─────────────────────────────────┤
+│ STARTER         │ €99       │ 50/mes      │ PYMEs pequeñas                  │
+│ PROFESSIONAL    │ €249      │ 200/mes     │ Agencias pequeñas               │
+│ ENTERPRISE      │ €499      │ Ilimitado   │ Agencias medianas               │
+│ CUSTOM          │ €1,000+   │ Personaliz. │ Grandes operadores              │
+└─────────────────┴───────────┴─────────────┴─────────────────────────────────┘
+
+
+MÉTRICAS SAAS CLAVE:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  €172           <2%              >30x              40%                      │
+│  ARPU           Churn            LTV/CAC           Margen EBITDA            │
+│  Mensual        Objetivo         (Año 3)           (Año 5)                  │
+│  (Año 4)                                                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+FUENTES DE INGRESOS:
+
+→ Suscripciones mensuales recurrentes (MRR) - Principal
+→ Tarifa por uso sobre umbral
+→ Integraciones API Enterprise
+→ Servicios de onboarding y configuración
+
+
+================================================================================
+SLIDE 7: PROYECCIONES FINANCIERAS
+================================================================================
+
+Plan a 5 años con crecimiento sostenible
+
+
+PROYECCIÓN DE RESULTADOS:
+
+┌─────────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
+│ Métrica     │ Año 1   │ Año 2   │ Año 3   │ Año 4   │ Año 5   │
+├─────────────┼─────────┼─────────┼─────────┼─────────┼─────────┤
+│ Clientes    │ 45      │ 115     │ 210     │ 320     │ 440     │
+│ ARR         │ €62K    │ €212K   │ €424K   │ €661K   │ €948K   │
+│ Costos      │ €94K    │ €190K   │ €308K   │ €435K   │ €570K   │
+│ EBITDA      │ -€31K   │ €22K    │ €116K   │ €226K   │ €378K   │
+│ Margen      │ -51%    │ 10%     │ 27%     │ 34%     │ 40%     │
+└─────────────┴─────────┴─────────┴─────────┴─────────┴─────────┘
+
+
+HITOS FINANCIEROS:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  BREAK-EVEN                    CRECIMIENTO ARR                              │
+│  Mes 15-18                     15x en 5 años                                │
+│  (~70 clientes)                De €62K a €948K                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SLIDE 8: EL EQUIPO
+================================================================================
+
+Combinación única de comercio exterior, tecnología y experiencia sectorial
+
+
+EQUIPO FUNDADOR:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  KEVIN DANIEL SUÁREZ LARGO                                                  │
+│  CEO & Founder                                                              │
+│  ─────────────────────────────────────────────                              │
+│  • Licenciado en Comercio Exterior                                          │
+│  • Máster en Comercio Internacional (EUDE)                                  │
+│  • Conocimiento directo del sistema TARIC                                   │
+│  • Experiencia en operativa aduanera ES/Latam                               │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ANDERSON ESCORCIA HERNÁNDEZ                                                │
+│  CTO & Co-Founder                                                           │
+│  ─────────────────────────────────────────────                              │
+│  • Ingeniero en Sistemas                                                    │
+│  • Especialista en IA y LLMs                                                │
+│  • Arquitectura cloud y APIs                                                │
+│  • Desarrollo full-stack (Python, FastAPI, React)                           │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PELAYO SERRANO GARCÍA                                                      │
+│  Advisor Sectorial                                                          │
+│  ─────────────────────────────────────────────                              │
+│  • Representante Aduanero Autorizado (RAA)                                  │
+│  • +38 AÑOS en sector aduanero español                                      │
+│  • Docente en EUDE Business School                                          │
+│  • Red de contactos OEA, AEAT, CAADE                                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+VENTAJA DEL EQUIPO:
+La combinación de conocimiento técnico en IA + experiencia real en comercio
+exterior + red de contactos de 38 años es extremadamente difícil de replicar.
+
+
+================================================================================
+SLIDE 9: ROADMAP 24 MESES
+================================================================================
+
+Plan de ejecución con hitos claros y medibles
+
+
+FASES DE DESARROLLO:
+
+M1-M3: FUNDACIÓN
+────────────────
+• Constitución SL Madrid
+• MVP comercial completo
+• 10 pilotos gratuitos
+• Módulo fitosanitario
+
+M4-M6: VALIDACIÓN
+─────────────────
+• Conversión pilotos a pago
+• Lanzamiento público
+• Primer MRR positivo
+• Programa referidos
+
+M7-M12: CRECIMIENTO
+───────────────────
+• 45 clientes activos
+• Plan Enterprise + API
+• Equipo de ventas
+• €5,200 MRR
+
+M13-M24: ESCALA
+───────────────
+• 115+ clientes
+• Entrada Latam
+• Break-even
+• Equipo 5 personas
+
+
+HITOS MEDIBLES:
+
+┌─────────────────────────────┬─────────────────────────────┐
+│ AÑO 1                       │ AÑO 2                       │
+├─────────────────────────────┼─────────────────────────────┤
+│ ☐ 45 clientes pagando       │ ☐ 115 clientes totales      │
+│ ☐ €5,200 MRR                │ ☐ €17,700 MRR               │
+│ ☐ Precisión >90%            │ ☐ 15 clientes Enterprise    │
+│ ☐ Módulo fitosanitario      │ ☐ Primer cliente Latam      │
+│ ☐ Churn mensual <3%         │ ☐ Equipo de 5 personas      │
+└─────────────────────────────┴─────────────────────────────┘
+
+
+================================================================================
+SLIDE 10: LA OPORTUNIDAD DE INVERSIÓN
+================================================================================
+
+Pre-Seed para capturar el mercado español
+
+
+TÉRMINOS DE LA RONDA:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  INVERSIÓN SOLICITADA          VALORACIÓN PRE-MONEY                         │
+│  €50,000 - €100,000            €400,000 - €600,000                          │
+│                                                                             │
+│  EQUITY OFRECIDO               RETORNO PROYECTADO                           │
+│  10% - 20%                     5-10x en 5 años                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+USO DE FONDOS:
+
+40% → Desarrollo producto (fuentes oficiales, fitosanitario)
+30% → Captación primeros 45 clientes
+20% → Infraestructura y operaciones
+10% → Legal y compliance
+
+
+¿POR QUÉ AHORA?
+
+→ Ventana competitiva de 12-18 meses antes de entrada de competidores
+→ Digicust expandiendo a Benelux (no España aún)
+→ Mercado español sin solución IA nativa
+→ Producto base 70% completado y funcional
+→ Advisor con 38 años de contactos en el sector
+
+
+================================================================================
+SLIDE 11: CIERRE
+================================================================================
+
+
+                    ¿Listo para transformar
+                 el comercio exterior español?
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│   "El comercio exterior español maneja €400.000 millones en importaciones  │
+│    anuales. Toda esa actividad necesita clasificación arancelaria.         │
+│    Hoy se hace a mano. TaricAI la automatiza."                             │
+│                                                                             │
+│                            - Kevin Daniel Suárez Largo                      │
+│                              CEO & Founder, TaricAI                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+                              CONTACTO
+                    ─────────────────────────────
+                    Kevin Daniel Suárez Largo
+                    CEO & Founder
+
+                    Email: hola@taricai.es
+                    Web: taricai.es
+                    Ubicación: Madrid, España
+
+
+================================================================================
+                    TaricAI © 2026 | Madrid, España
+                 Documento confidencial para inversores
+================================================================================
