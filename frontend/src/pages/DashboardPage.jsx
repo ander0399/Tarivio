@@ -62,8 +62,10 @@ import ImageClassifier from "../components/ImageClassifier";
 import MarketStudyPanel from "../components/MarketStudyPanel";
 import CountrySearchSelect from "../components/CountrySearchSelect";
 import ClarificationQuestions from "../components/ClarificationQuestions";
+import InternationalChatPage from "./InternationalChatPage";
 import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
 import { findApplicableAgreements } from "../config/tradeAgreements";
+import { MessageSquare } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, token, logout } = useAuth();
@@ -458,6 +460,19 @@ export default function DashboardPage() {
               {t("dashboard.search")}
             </button>
             <button
+              onClick={() => setActiveTab("chat")}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === "chat" 
+                  ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-400 border border-blue-500/50" 
+                  : "bg-[#0d1424] text-gray-400 border border-[rgba(0,212,255,0.1)] hover:border-blue-500/30"
+              }`}
+              data-testid="tab-chat"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Asistente IA
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full">NUEVO</span>
+            </button>
+            <button
               onClick={() => setActiveTab("history")}
               className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
                 activeTab === "history" 
@@ -484,6 +499,11 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
+
+          {/* Chat Tab - International Assistant */}
+          {activeTab === "chat" && (
+            <InternationalChatPage token={token} />
+          )}
 
           {/* Search Tab */}
           {activeTab === "search" && (

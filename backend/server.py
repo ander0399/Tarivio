@@ -8,13 +8,14 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
 import jwt
 import bcrypt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from documents_database import OFFICIAL_DOCUMENTS, DOCUMENT_CATEGORIES
+from customs_database import WORLDWIDE_CUSTOMS_DATABASE, TRADE_AGREEMENTS_INFO, GLOBAL_RESOURCES
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -164,6 +165,33 @@ class RegulatoryAlert(BaseModel):
     effective_date: str
     source: str
     created_at: str
+
+# Chat Conversacional Models
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+    timestamp: str
+    sources: Optional[List[dict]] = None
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    origin_country: Optional[str] = None
+    destination_country: Optional[str] = None
+    product_description: Optional[str] = None
+    language: str = "es"
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+    sources: List[dict]
+    suggested_questions: List[str]
+    context: Optional[dict] = None
+
+class CountryTradeInfo(BaseModel):
+    origin_country: str
+    destination_country: str
+    language: str = "es"
 
 # ============== AUTH HELPERS ==============
 
@@ -1460,6 +1488,355 @@ async def root():
 @api_router.get("/health")
 async def health():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+# ============== CHAT CONVERSACIONAL INTERNACIONAL ==============
+
+def get_country_info(country_code: str) -> dict:
+    """Obtiene información de un país de la base de datos"""
+    return WORLDWIDE_CUSTOMS_DATABASE.get(country_code.upper(), None)
+
+def get_trade_agreements_between(origin: str, destination: str) -> List[dict]:
+    """Encuentra tratados comerciales entre dos países"""
+    agreements = []
+    origin_upper = origin.upper()
+    dest_upper = destination.upper()
+    
+    for agreement_key, agreement_info in TRADE_AGREEMENTS_INFO.items():
+        members = agreement_info.get("members", [])
+        associates = agreement_info.get("associates", [])
+        all_members = members + associates if isinstance(associates, list) else members
+        
+        # Verificar si ambos países son miembros
+        origin_in = origin_upper in all_members
+        dest_in = dest_upper in all_members
+        
+        if origin_in and dest_in:
+            agreements.append({
+                "name": agreement_info.get("name", agreement_key),
+                "key": agreement_key,
+                "type": agreement_info.get("type", "FTA"),
+                "tariff_elimination": agreement_info.get("tariff_elimination", "Variable"),
+                "website": agreement_info.get("website", "")
+            })
+    
+    return agreements
+
+def build_country_context(origin_code: str, destination_code: str, language: str = "es") -> str:
+    """Construye el contexto de país para el prompt de IA"""
+    origin_info = get_country_info(origin_code)
+    dest_info = get_country_info(destination_code)
+    trade_agreements = get_trade_agreements_between(origin_code, destination_code)
+    
+    context = ""
+    
+    if origin_info:
+        context += f"""
+**PAÍS DE ORIGEN: {origin_info.get('name', origin_code)}**
+- Autoridad Aduanera: {origin_info.get('customs_authority', 'N/A')}
+- Web Aduanas: {origin_info.get('customs_website', 'N/A')}
+- Autoridad Fitosanitaria: {origin_info.get('phytosanitary_authority', 'N/A')}
+- Web Fitosanitaria: {origin_info.get('phytosanitary_website', 'N/A')}
+- Sistema HS: {origin_info.get('hs_system', 'N/A')}
+- Moneda: {origin_info.get('currency', 'N/A')}
+"""
+    
+    if dest_info:
+        context += f"""
+**PAÍS DE DESTINO: {dest_info.get('name', destination_code)}**
+- Autoridad Aduanera: {dest_info.get('customs_authority', 'N/A')}
+- Web Aduanas: {dest_info.get('customs_website', 'N/A')}
+- Base de Datos Arancelaria: {dest_info.get('tariff_database', 'N/A')}
+- Autoridad Fitosanitaria: {dest_info.get('phytosanitary_authority', 'N/A')}
+- Web Fitosanitaria: {dest_info.get('phytosanitary_website', 'N/A')}
+- IVA/VAT: {dest_info.get('vat_rate', 'N/A')}%
+- Miembro UE: {'Sí' if dest_info.get('eu_member', False) else 'No'}
+- Requisitos de Importación: {', '.join(dest_info.get('import_requirements', []))}
+- Notas Especiales: {dest_info.get('special_notes', 'N/A')}
+"""
+    
+    if trade_agreements:
+        context += "\n**TRATADOS COMERCIALES APLICABLES:**\n"
+        for agreement in trade_agreements:
+            context += f"- {agreement['name']} ({agreement['type']}): Eliminación arancelaria {agreement.get('tariff_elimination', 'Variable')}\n"
+            if agreement.get('website'):
+                context += f"  Fuente: {agreement['website']}\n"
+    else:
+        context += "\n**TRATADOS COMERCIALES:** No se encontraron tratados bilaterales directos entre estos países.\n"
+    
+    return context
+
+@api_router.post("/chat/message")
+async def chat_message(request: ChatRequest, user: dict = Depends(get_current_user)):
+    """Endpoint principal del chat conversacional internacional"""
+    try:
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        # Obtener historial de la sesión
+        chat_history = await db.chat_sessions.find_one({"session_id": session_id, "user_id": user["id"]})
+        if not chat_history:
+            chat_history = {
+                "session_id": session_id,
+                "user_id": user["id"],
+                "messages": [],
+                "context": {},
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+        
+        # Actualizar contexto si se proporcionan países
+        if request.origin_country:
+            chat_history["context"]["origin_country"] = request.origin_country
+        if request.destination_country:
+            chat_history["context"]["destination_country"] = request.destination_country
+        if request.product_description:
+            chat_history["context"]["product_description"] = request.product_description
+        
+        # Construir contexto de países
+        country_context = ""
+        origin = chat_history["context"].get("origin_country")
+        destination = chat_history["context"].get("destination_country")
+        if origin and destination:
+            country_context = build_country_context(origin, destination, request.language)
+        
+        # Sistema de prompt internacional
+        language_instructions = {
+            "es": "Responde siempre en español.",
+            "en": "Always respond in English.",
+            "fr": "Répondez toujours en français.",
+            "de": "Antworte immer auf Deutsch.",
+            "pt": "Responda sempre em português.",
+            "it": "Rispondi sempre in italiano.",
+            "nl": "Antwoord altijd in het Nederlands.",
+            "pl": "Zawsze odpowiadaj po polsku.",
+            "zh": "请用中文回答。",
+            "ja": "日本語で回答してください。",
+            "ko": "한국어로 답변해 주세요.",
+            "ar": "أجب دائماً باللغة العربية.",
+            "ru": "Всегда отвечайте на русском языке."
+        }
+        
+        lang_instruction = language_instructions.get(request.language, language_instructions["es"])
+        
+        system_prompt = f"""Eres TaricAI, un asistente experto en comercio internacional, clasificación arancelaria y regulaciones aduaneras a nivel mundial. {lang_instruction}
+
+CAPACIDADES:
+1. Clasificación arancelaria de productos (códigos HS/TARIC)
+2. Información sobre aranceles, impuestos y tasas entre países
+3. Requisitos fitosanitarios y no fitosanitarios
+4. Barreras de entrada y regulaciones
+5. Tratados comerciales vigentes
+6. Documentación requerida para importación/exportación
+7. Fuentes oficiales y autoridades competentes
+
+{country_context}
+
+RECURSOS GLOBALES:
+- WTO (Organización Mundial del Comercio): https://www.wto.org/
+- WCO (Organización Mundial de Aduanas): http://www.wcoomd.org/
+- IPPC (Convención Internacional de Protección Fitosanitaria): https://www.ippc.int/
+- ITC Market Access Map: https://www.macmap.org/
+
+REGLAS IMPORTANTES:
+1. SIEMPRE proporciona las fuentes oficiales de donde obtienes la información
+2. Si no tienes información actualizada, indica que el usuario debe verificar en la fuente oficial
+3. Sé específico sobre los requisitos según el tipo de producto
+4. Menciona los tratados comerciales aplicables que pueden reducir aranceles
+5. Advierte sobre posibles restricciones o prohibiciones
+6. Proporciona los enlaces a las autoridades competentes
+
+FORMATO DE RESPUESTA:
+- Usa encabezados claros
+- Lista los requisitos de forma estructurada
+- Incluye siempre una sección de "Fuentes Oficiales" al final
+- Si se necesita más información del usuario, formula preguntas claras
+
+Historial de la conversación:
+{chr(10).join([f"{m['role']}: {m['content']}" for m in chat_history.get('messages', [])[-5:]])}
+"""
+        
+        # Llamar a la IA
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"chat-{session_id}",
+            system_message=system_prompt
+        ).with_model("openai", "gpt-5.2")
+        
+        ai_response = await chat.send_message(UserMessage(text=request.message))
+        
+        # La respuesta es un string directamente
+        response_text = ai_response if isinstance(ai_response, str) else str(ai_response)
+        
+        # Extraer fuentes de la respuesta
+        sources = []
+        origin_info = get_country_info(origin) if origin else None
+        dest_info = get_country_info(destination) if destination else None
+        
+        if origin_info:
+            sources.append({
+                "name": f"Aduanas {origin_info.get('name', origin)}",
+                "url": origin_info.get('customs_website', ''),
+                "type": "customs_authority"
+            })
+        if dest_info:
+            sources.append({
+                "name": f"Aduanas {dest_info.get('name', destination)}",
+                "url": dest_info.get('customs_website', ''),
+                "type": "customs_authority"
+            })
+            if dest_info.get('tariff_database'):
+                sources.append({
+                    "name": f"Base Arancelaria {dest_info.get('name', destination)}",
+                    "url": dest_info.get('tariff_database', ''),
+                    "type": "tariff_database"
+                })
+            if dest_info.get('phytosanitary_website'):
+                sources.append({
+                    "name": f"Autoridad Fitosanitaria {dest_info.get('name', destination)}",
+                    "url": dest_info.get('phytosanitary_website', ''),
+                    "type": "phytosanitary"
+                })
+        
+        # Agregar fuentes globales
+        sources.extend([
+            {"name": "WTO - Organización Mundial del Comercio", "url": "https://www.wto.org/", "type": "global"},
+            {"name": "WCO - Organización Mundial de Aduanas", "url": "http://www.wcoomd.org/", "type": "global"}
+        ])
+        
+        # Generar preguntas sugeridas
+        suggested_questions = []
+        if not origin or not destination:
+            suggested_questions.append("¿Cuál es el país de origen y destino de tu operación?")
+        else:
+            product = chat_history["context"].get("product_description", "")
+            suggested_questions = [
+                f"¿Cuáles son los aranceles para exportar de {origin_info.get('name', origin) if origin_info else origin} a {dest_info.get('name', destination) if dest_info else destination}?",
+                "¿Qué documentos necesito para esta importación?",
+                "¿Existen tratados comerciales que reduzcan los aranceles?",
+                "¿Cuáles son los requisitos fitosanitarios?",
+                "¿Hay restricciones o prohibiciones para este producto?"
+            ]
+        
+        # Guardar mensaje del usuario
+        chat_history["messages"].append({
+            "role": "user",
+            "content": request.message,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Guardar respuesta del asistente
+        chat_history["messages"].append({
+            "role": "assistant",
+            "content": response_text,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "sources": sources
+        })
+        
+        chat_history["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Actualizar en base de datos
+        await db.chat_sessions.update_one(
+            {"session_id": session_id},
+            {"$set": chat_history},
+            upsert=True
+        )
+        
+        return {
+            "response": response_text,
+            "session_id": session_id,
+            "sources": sources,
+            "suggested_questions": suggested_questions,
+            "context": chat_history["context"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error procesando mensaje: {str(e)}")
+
+@api_router.get("/chat/sessions")
+async def get_chat_sessions(user: dict = Depends(get_current_user)):
+    """Obtiene las sesiones de chat del usuario"""
+    sessions = await db.chat_sessions.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "session_id": 1, "context": 1, "created_at": 1, "updated_at": 1}
+    ).sort("updated_at", -1).limit(20).to_list(20)
+    return {"sessions": sessions}
+
+@api_router.get("/chat/session/{session_id}")
+async def get_chat_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Obtiene una sesión de chat específica"""
+    session = await db.chat_sessions.find_one(
+        {"session_id": session_id, "user_id": user["id"]},
+        {"_id": 0}
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    return session
+
+@api_router.delete("/chat/session/{session_id}")
+async def delete_chat_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Elimina una sesión de chat"""
+    result = await db.chat_sessions.delete_one({"session_id": session_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    return {"message": "Sesión eliminada"}
+
+@api_router.post("/trade/country-info")
+async def get_country_trade_info(request: CountryTradeInfo, user: dict = Depends(get_current_user)):
+    """Obtiene información comercial completa entre dos países"""
+    origin_info = get_country_info(request.origin_country)
+    dest_info = get_country_info(request.destination_country)
+    trade_agreements = get_trade_agreements_between(request.origin_country, request.destination_country)
+    
+    if not origin_info:
+        raise HTTPException(status_code=404, detail=f"País de origen no encontrado: {request.origin_country}")
+    if not dest_info:
+        raise HTTPException(status_code=404, detail=f"País de destino no encontrado: {request.destination_country}")
+    
+    return {
+        "origin": origin_info,
+        "destination": dest_info,
+        "trade_agreements": trade_agreements,
+        "has_preferential_access": len(trade_agreements) > 0,
+        "global_resources": GLOBAL_RESOURCES
+    }
+
+@api_router.get("/countries/list")
+async def list_countries():
+    """Lista todos los países disponibles en la base de datos"""
+    countries = []
+    for code, info in WORLDWIDE_CUSTOMS_DATABASE.items():
+        countries.append({
+            "code": code,
+            "name": info.get("name", code),
+            "name_en": info.get("name_en", code),
+            "region": info.get("region", ""),
+            "subregion": info.get("subregion", ""),
+            "eu_member": info.get("eu_member", False),
+            "currency": info.get("currency", "")
+        })
+    return {"countries": sorted(countries, key=lambda x: x["name"])}
+
+@api_router.get("/country/{country_code}")
+async def get_country_details(country_code: str):
+    """Obtiene información detallada de un país"""
+    country_info = get_country_info(country_code)
+    if not country_info:
+        raise HTTPException(status_code=404, detail=f"País no encontrado: {country_code}")
+    return country_info
+
+@api_router.get("/trade-agreements/list")
+async def list_trade_agreements():
+    """Lista todos los tratados comerciales"""
+    agreements = []
+    for key, info in TRADE_AGREEMENTS_INFO.items():
+        agreements.append({
+            "key": key,
+            "name": info.get("name", key),
+            "type": info.get("type", "FTA"),
+            "members": info.get("members", []),
+            "tariff_elimination": info.get("tariff_elimination", ""),
+            "website": info.get("website", "")
+        })
+    return {"agreements": agreements}
 
 # ============== DOCUMENTOS PARA DESCARGAR ==============
 
