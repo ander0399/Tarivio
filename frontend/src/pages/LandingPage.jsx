@@ -61,33 +61,37 @@ export default function LandingPage() {
 
   const features = [
     {
+      icon: Globe,
+      title: "COMERCIO INTERNACIONAL 360°",
+      description: "Información comercial completa de 65 países: aranceles, requisitos fitosanitarios, barreras de entrada, y autoridades aduaneras oficiales.",
+      stats: [
+        { label: "PAÍSES", value: "65+" },
+        { label: "FUENTES", value: "130+" }
+      ]
+    },
+    {
       icon: Zap,
-      title: "CLASIFICACIÓN TARIC CON IA",
-      description: "Motor de clasificación arancelaria potenciado por GPT-5.2 con 94% de precisión a nivel de código completo de 10 dígitos.",
+      title: "CLASIFICACIÓN IA AVANZADA",
+      description: "Motor de clasificación arancelaria potenciado por GPT-5.2. Clasifica por texto, imagen o chat conversacional.",
       stats: [
         { label: "PRECISIÓN", value: "94%" },
         { label: "CÓDIGOS", value: "21K+" }
       ]
     },
     {
-      icon: Calculator,
-      title: "CÁLCULO DE ARANCELES",
-      description: "Derechos de importación, IVA, tasas especiales y aranceles preferenciales según acuerdos comerciales vigentes.",
+      icon: Scale,
+      title: "TRATADOS COMERCIALES",
+      description: "Detecta automáticamente tratados aplicables: USMCA, RCEP, CPTPP, Alianza del Pacífico, MERCOSUR y más.",
       stats: [
-        { label: "PAÍSES", value: "184+" },
+        { label: "TRATADOS", value: "10+" },
         { label: "ACUERDOS", value: "40+" }
       ]
     },
     {
       icon: Shield,
       title: "COMPLIANCE AUTOMATIZADO",
-      description: "Alertas en tiempo real sobre anti-dumping, sanciones comerciales, restricciones fitosanitarias y CITES.",
-      badge: "COMPLIANCE SHIELD"
-    },
-    {
-      icon: FileText,
-      title: "DOCUMENTACIÓN OFICIAL",
-      description: "Checklist inteligente con todos los documentos requeridos: DUA, EUR.1, certificados de origen, fitosanitarios y T2L."
+      description: "Alertas en tiempo real sobre anti-dumping, sanciones, restricciones fitosanitarias, certificaciones HALAL y normativas.",
+      badge: "COMPLIANCE GLOBAL"
     }
   ];
 
@@ -120,15 +124,17 @@ export default function LandingPage() {
 
   const officialSources = [
     { name: "TARIC UE", logo: "🇪🇺", desc: "Comisión Europea" },
-    { name: "AEAT", logo: "🇪🇸", desc: "Agencia Tributaria" },
-    { name: "MAPA", logo: "🌿", desc: "Min. Agricultura" },
-    { name: "EUR-Lex", logo: "⚖️", desc: "Legislación UE" }
+    { name: "CBP USA", logo: "🇺🇸", desc: "US Customs" },
+    { name: "DIAN", logo: "🇨🇴", desc: "Colombia" },
+    { name: "SAT", logo: "🇲🇽", desc: "México" },
+    { name: "GACC", logo: "🇨🇳", desc: "China Customs" },
+    { name: "WTO", logo: "🌐", desc: "Organización Mundial" }
   ];
 
   const stats = [
-    { number: "21,000+", label: "Códigos TARIC", icon: BarChart3 },
-    { number: "94%", label: "Precisión IA", icon: Zap },
-    { number: "184", label: "Países Cubiertos", icon: Globe },
+    { number: "65+", label: "Países Cubiertos", icon: Globe },
+    { number: "10+", label: "Tratados Comerciales", icon: Scale },
+    { number: "21K+", label: "Códigos Arancelarios", icon: BarChart3 },
     { number: "<3s", label: "Tiempo Respuesta", icon: Clock }
   ];
 
@@ -240,29 +246,30 @@ export default function LandingPage() {
               <div className="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-4 py-2 rounded-full mb-8">
                 <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
                 <span className="text-cyan-400 text-xs font-semibold uppercase tracking-wider">
-                  Plataforma B2B para Agencias de Aduanas
+                  Plataforma Global para Comercio Internacional
                 </span>
               </div>
               
               <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-4" data-testid="hero-title">
-                CLASIFICA
+                COMERCIO
                 <br />
-                <span className="text-cyan-400">CON IA</span>
+                <span className="text-cyan-400">GLOBAL</span>
+                <br />
+                <span className="text-3xl md:text-4xl text-gray-400">CON IA</span>
               </h1>
               
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-[2px] bg-cyan-400" />
                 <span className="text-cyan-400 text-sm font-semibold tracking-wider">
-                  94% PRECISIÓN · FUENTES OFICIALES UE
+                  65+ PAÍSES · FUENTES OFICIALES · TRATADOS COMERCIALES
                 </span>
               </div>
               
               <p className="text-gray-400 text-lg mb-8 max-w-lg leading-relaxed">
-                El primer agente de IA especializado en clasificación TARIC para 
-                <strong className="text-white"> agencias de aduanas e importadores</strong>. 
-                Automatiza la clasificación arancelaria, el cálculo de tributos y la 
-                verificación de compliance con datos de la 
-                <strong className="text-cyan-400"> Comisión Europea y la Agencia Tributaria</strong>.
+                La plataforma de inteligencia comercial más completa para 
+                <strong className="text-white"> agencias de aduanas, importadores y exportadores</strong> de todos los tamaños. 
+                Clasificación arancelaria, requisitos fitosanitarios, tratados comerciales y 
+                <strong className="text-cyan-400"> documentación oficial de 65 países</strong>.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 mb-10">

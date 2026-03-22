@@ -63,9 +63,10 @@ import MarketStudyPanel from "../components/MarketStudyPanel";
 import CountrySearchSelect from "../components/CountrySearchSelect";
 import ClarificationQuestions from "../components/ClarificationQuestions";
 import InternationalChatPage from "./InternationalChatPage";
+import WorldTradeMap from "../components/WorldTradeMap";
 import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
 import { findApplicableAgreements } from "../config/tradeAgreements";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Map } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, token, logout } = useAuth();
@@ -470,7 +471,20 @@ export default function DashboardPage() {
             >
               <MessageSquare className="w-4 h-4" />
               Asistente IA
-              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full">NUEVO</span>
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full">PRO</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("map")}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === "map" 
+                  ? "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-400 border border-emerald-500/50" 
+                  : "bg-[#0d1424] text-gray-400 border border-[rgba(0,212,255,0.1)] hover:border-emerald-500/30"
+              }`}
+              data-testid="tab-map"
+            >
+              <Map className="w-4 h-4" />
+              Mapa Global
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-full">NUEVO</span>
             </button>
             <button
               onClick={() => setActiveTab("history")}
@@ -499,6 +513,28 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
+
+          {/* Map Tab - World Trade Map */}
+          {activeTab === "map" && (
+            <div className="space-y-6">
+              <WorldTradeMap 
+                token={token}
+                onSelectOrigin={(country) => {
+                  // El código ya viene del objeto country
+                  const countryCode = Object.entries(COUNTRIES).find(([code, c]) => c.name === country.name)?.[0] || country.code;
+                  if (countryCode) setOriginCountry(countryCode);
+                  setActiveTab("chat");
+                  toast.success(`País de origen seleccionado: ${country.name}`);
+                }}
+                onSelectDestination={(country) => {
+                  const countryCode = Object.entries(COUNTRIES).find(([code, c]) => c.name === country.name)?.[0] || country.code;
+                  if (countryCode) setDestinationCountry(countryCode);
+                  setActiveTab("chat");
+                  toast.success(`País de destino seleccionado: ${country.name}`);
+                }}
+              />
+            </div>
+          )}
 
           {/* Chat Tab - International Assistant */}
           {activeTab === "chat" && (

@@ -69,6 +69,27 @@ Crear una aplicación SaaS donde se pueda leer el TARIC y con inteligencia artif
 - Fuentes oficiales en cada respuesta
 - Soporte multi-idioma
 
+#### 5.4 Mapa Mundial Interactivo ✅ NEW
+- Mapa SVG interactivo con 65+ países
+- Colores por región (Europa, América, Asia, África, Oceanía)
+- Click en país para ver información comercial detallada
+- Panel lateral con:
+  - Autoridad aduanera y enlace oficial
+  - Base de datos arancelaria
+  - Autoridad fitosanitaria
+  - Información fiscal (IVA, moneda)
+  - Requisitos de importación
+  - Tratados comerciales
+  - Notas especiales
+- Controles de zoom y navegación
+- Leyenda de regiones
+
+#### 5.5 Landing Page Profesional
+- Enfoque en comercio internacional global
+- Estadísticas: 65+ países, 10+ tratados, 21K+ códigos
+- Fuentes oficiales: TARIC UE, CBP USA, DIAN, SAT, GACC, WTO
+- Mensaje dirigido a agencias de aduanas, importadores y exportadores de todos los tamaños
+
 ---
 
 ## API Endpoints
@@ -113,9 +134,11 @@ Crear una aplicación SaaS donde se pueda leer el TARIC y con inteligencia artif
 
 ## Key Files
 - `/app/backend/server.py` - Backend principal
-- `/app/backend/customs_database.py` - Base de datos de 65 países (NEW)
+- `/app/backend/customs_database.py` - Base de datos de 65 países
 - `/app/frontend/src/pages/DashboardPage.jsx` - Dashboard principal
-- `/app/frontend/src/pages/InternationalChatPage.jsx` - Chat conversacional (NEW)
+- `/app/frontend/src/pages/InternationalChatPage.jsx` - Chat conversacional
+- `/app/frontend/src/pages/LandingPage.jsx` - Landing page profesional
+- `/app/frontend/src/components/WorldTradeMap.jsx` - Mapa mundial interactivo (NEW)
 - `/app/frontend/src/components/ImageClassifier.jsx` - Clasificación por imagen
 - `/app/frontend/src/components/MarketStudyPanel.jsx` - Estudios de mercado
 
