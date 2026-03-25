@@ -30,7 +30,10 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
-  UserPlus
+  UserPlus,
+  Download,
+  Plug,
+  Map
 } from "lucide-react";
 import {
   Select,
@@ -65,9 +68,14 @@ import ClarificationQuestions from "../components/ClarificationQuestions";
 import InternationalChatPage from "./InternationalChatPage";
 import WorldTradeMap from "../components/WorldTradeMap";
 import ImportCostSimulator from "../components/ImportCostSimulator";
+import ERPIntegration from "../components/ERPIntegration";
+import UsageStatsPanel from "../components/UsageStatsPanel";
+import BatchClassificationPanel from "../components/BatchClassificationPanel";
+import AlertSubscriptionPanel from "../components/AlertSubscriptionPanel";
+import { exportToExcel, exportHistoryToExcel } from "../utils/excelExport";
 import { COUNTRIES, getCountriesByRegion, REGION_ORDER, getCountryByCode } from "../config/countries";
 import { findApplicableAgreements } from "../config/tradeAgreements";
-import { MessageSquare, Map, Calculator } from "lucide-react";
+import { MessageSquare, Calculator } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, token, logout } = useAuth();
@@ -99,6 +107,9 @@ export default function DashboardPage() {
   
   // State for import cost simulator
   const [showCostSimulator, setShowCostSimulator] = useState(false);
+  
+  // State for ERP Integration modal
+  const [showERPIntegration, setShowERPIntegration] = useState(false);
 
   // Group countries by region for better UX
   const countriesByRegion = getCountriesByRegion();
@@ -516,6 +527,43 @@ export default function DashboardPage() {
                 {t("dashboard.team")} ({teamMembers.length})
               </button>
             )}
+            {/* Nuevos tabs */}
+            <button
+              onClick={() => setActiveTab("stats")}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === "stats" 
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50" 
+                  : "bg-[#0d1424] text-gray-400 border border-[rgba(0,212,255,0.1)] hover:border-cyan-500/30"
+              }`}
+              data-testid="tab-stats"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Estadísticas
+            </button>
+            <button
+              onClick={() => setActiveTab("batch")}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === "batch" 
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50" 
+                  : "bg-[#0d1424] text-gray-400 border border-[rgba(0,212,255,0.1)] hover:border-cyan-500/30"
+              }`}
+              data-testid="tab-batch"
+            >
+              <FileText className="w-4 h-4" />
+              Lotes
+            </button>
+            <button
+              onClick={() => setActiveTab("alerts")}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === "alerts" 
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/50" 
+                  : "bg-[#0d1424] text-gray-400 border border-[rgba(0,212,255,0.1)] hover:border-cyan-500/30"
+              }`}
+              data-testid="tab-alerts"
+            >
+              <Bell className="w-4 h-4" />
+              Alertas
+            </button>
           </div>
 
           {/* Map Tab - World Trade Map */}
@@ -842,6 +890,70 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   )}
+                  
+                  {/* Botones de Exportación y ERP */}
+                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Botón Exportar a Excel */}
+                    <Button
+                      onClick={() => {
+                        try {
+                          const exportData = {
+                            productDescription: searchResult.product_description,
+                            hsCode: searchResult.taric_code,
+                            originCountry: getCountryByCode(originCountry)?.name || originCountry,
+                            destinationCountry: getCountryByCode(destinationCountry)?.name || destinationCountry,
+                            sources: searchResult.official_sources,
+                            costBreakdown: {
+                              valor_fob: 10000,
+                              flete_estimado: 1000,
+                              seguro_estimado: 100,
+                              arancel_porcentaje: parseFloat(searchResult.tariffs?.[0]?.rate?.replace('%', '') || '5'),
+                              iva_porcentaje: parseFloat(searchResult.vat_rate?.replace('%', '') || '21'),
+                              otros_costos: {
+                                agente_aduanal: 150,
+                                almacenaje_estimado: 100,
+                                documentacion: 50
+                              }
+                            },
+                            documents: searchResult.documents,
+                            tradeAgreements: tradeAgreements,
+                            countryInfo: getCountryByCode(destinationCountry)
+                          };
+                          exportToExcel(exportData, `TaricAI_${searchResult.taric_code}`);
+                          toast.success('Archivo Excel exportado correctamente con fórmulas');
+                        } catch (err) {
+                          console.error('Error exporting:', err);
+                          toast.error('Error al exportar a Excel');
+                        }
+                      }}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-4"
+                      data-testid="export-excel-btn"
+                    >
+                      <Download className="w-5 h-5 mr-2" />
+                      Exportar a Excel (con fórmulas)
+                    </Button>
+                    
+                    {/* Botón Integración ERP */}
+                    <Button
+                      onClick={() => setShowERPIntegration(true)}
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-4"
+                      data-testid="open-erp-integration"
+                    >
+                      <Plug className="w-5 h-5 mr-2" />
+                      Integración con ERP
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    Exporta resultados con fórmulas visibles o conecta con tu sistema de gestión
+                  </p>
+                  
+                  {/* ERP Integration Modal */}
+                  {showERPIntegration && (
+                    <ERPIntegration 
+                      token={token}
+                      onClose={() => setShowERPIntegration(false)}
+                    />
+                  )}
                 </motion.div>
               )}
             </div>
@@ -854,10 +966,29 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <h3 className="label-cyber mb-6 flex items-center gap-2">
-                <History className="w-4 h-4" />
-                Historial de Clasificaciones
-              </h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="label-cyber flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  Historial de Clasificaciones
+                </h3>
+                {history.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      try {
+                        exportHistoryToExcel(history, 'TaricAI_Historial');
+                        toast.success('Historial exportado a Excel');
+                      } catch (err) {
+                        toast.error('Error al exportar historial');
+                      }
+                    }}
+                    className="bg-green-500/20 border border-green-500/50 text-green-400 hover:bg-green-500/30 h-10 px-4 text-sm"
+                    data-testid="export-history-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Exportar Historial
+                  </Button>
+                )}
+              </div>
               
               {loadingHistory ? (
                 <div className="flex items-center justify-center py-12">
@@ -1048,6 +1179,37 @@ export default function DashboardPage() {
                   </motion.div>
                 ))}
               </div>
+            </motion.div>
+          )}
+
+          {/* Stats Tab - Usage Statistics Dashboard */}
+          {activeTab === "stats" && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="cyber-card p-6"
+            >
+              <UsageStatsPanel token={token} />
+            </motion.div>
+          )}
+
+          {/* Batch Tab - Batch Classification */}
+          {activeTab === "batch" && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <BatchClassificationPanel token={token} />
+            </motion.div>
+          )}
+
+          {/* Alerts Tab - Alert Subscriptions */}
+          {activeTab === "alerts" && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AlertSubscriptionPanel token={token} />
             </motion.div>
           )}
         </div>

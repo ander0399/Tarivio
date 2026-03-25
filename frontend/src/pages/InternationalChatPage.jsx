@@ -213,6 +213,78 @@ const CountrySelector = ({ value, onChange, label, placeholder }) => {
   );
 };
 
+// Componente para opciones de clarificación (selección múltiple)
+const ClarificationOptions = ({ options, allowCustom, customPlaceholder, onSelect }) => {
+  const [customValue, setCustomValue] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const handleOptionClick = (option) => {
+    onSelect(option.label, option.value);
+  };
+
+  const handleCustomSubmit = () => {
+    if (customValue.trim()) {
+      onSelect(customValue, customValue);
+      setCustomValue('');
+      setShowCustomInput(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option, idx) => (
+          <button
+            key={option.id || idx}
+            onClick={() => handleOptionClick(option)}
+            className="flex items-center justify-start gap-2 px-4 py-3 bg-slate-800 text-gray-200 rounded-xl text-sm font-medium transition-all hover:bg-cyan-500/20 hover:text-cyan-400 hover:border-cyan-500/50 border border-slate-700 text-left"
+            data-testid={`clarification-option-${idx}`}
+          >
+            <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center font-bold flex-shrink-0">
+              {String.fromCharCode(65 + idx)}
+            </span>
+            <span>{option.label}</span>
+          </button>
+        ))}
+      </div>
+      
+      {allowCustom && (
+        <div className="pt-2 border-t border-slate-700">
+          {!showCustomInput ? (
+            <button
+              onClick={() => setShowCustomInput(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-gray-400 rounded-xl text-sm font-medium transition-all hover:bg-slate-800 hover:text-white border border-dashed border-slate-700"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Otro (escribir respuesta personalizada)
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customValue}
+                onChange={(e) => setCustomValue(e.target.value)}
+                placeholder={customPlaceholder || "Escribe tu respuesta..."}
+                className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-cyan-500"
+                onKeyPress={(e) => e.key === 'Enter' && handleCustomSubmit()}
+                autoFocus
+                data-testid="clarification-custom-input"
+              />
+              <button
+                onClick={handleCustomSubmit}
+                disabled={!customValue.trim()}
+                className="px-4 py-3 bg-cyan-500 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-cyan-600 transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Componente para opciones de respuesta rápida
 const QuickOptions = ({ options, onSelect, type = 'button' }) => {
   if (!options || options.length === 0) return null;
@@ -238,7 +310,7 @@ const QuickOptions = ({ options, onSelect, type = 'button' }) => {
 };
 
 // Componente de mensaje del chat
-const ChatMessage = ({ message, isUser, onOptionSelect }) => {
+const ChatMessage = ({ message, isUser, onOptionSelect, onClarificationSelect }) => {
   return (
     <div className={`flex gap-3 mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
@@ -250,15 +322,33 @@ const ChatMessage = ({ message, isUser, onOptionSelect }) => {
         <div className={`rounded-2xl px-4 py-3 ${
           isUser 
             ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-md shadow-lg' 
-            : 'bg-slate-800 text-gray-100 rounded-bl-md border border-slate-700'
+            : message.isClarification
+              ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-gray-100 rounded-bl-md border border-amber-500/30'
+              : 'bg-slate-800 text-gray-100 rounded-bl-md border border-slate-700'
         }`}>
+          {message.isClarification && (
+            <div className="flex items-center gap-2 mb-2 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+              <HelpCircle className="w-3 h-3" />
+              Necesito más información
+            </div>
+          )}
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
             {message.content}
           </div>
         </div>
         
-        {/* Opciones de respuesta rápida */}
-        {!isUser && message.options && (
+        {/* Opciones de clarificación con selección múltiple */}
+        {!isUser && message.isClarification && message.clarificationOptions && (
+          <ClarificationOptions
+            options={message.clarificationOptions}
+            allowCustom={message.allowCustom}
+            customPlaceholder={message.customPlaceholder}
+            onSelect={onClarificationSelect}
+          />
+        )}
+        
+        {/* Opciones de respuesta rápida (preguntas sugeridas) */}
+        {!isUser && !message.isClarification && message.options && (
           <QuickOptions 
             options={message.options} 
             onSelect={onOptionSelect}
@@ -413,6 +503,21 @@ Puedo ayudarte con:
     }, 500);
   };
 
+  // Manejar selección de opciones de clarificación
+  const handleClarificationSelect = (label, value) => {
+    // Añadir respuesta del usuario al chat
+    const userMessage = {
+      role: 'user',
+      content: label
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    // Enviar mensaje con la opción seleccionada
+    setTimeout(() => {
+      sendMessage(label, value);
+    }, 300);
+  };
+
   const processOption = (option) => {
     const value = typeof option === 'object' ? option.value : option;
 
@@ -555,7 +660,7 @@ Cuanta más información me des, más precisa será la clasificación.`,
     setConversationStep('select_product_type');
   };
 
-  const sendMessage = async (messageText = inputMessage) => {
+  const sendMessage = async (messageText = inputMessage, selectedOption = null) => {
     if (!messageText.trim() || isLoading) return;
 
     const userMessage = {
@@ -575,23 +680,48 @@ Cuanta más información me des, más precisa será la clasificación.`,
           session_id: sessionId,
           origin_country: originCountry || undefined,
           destination_country: destinationCountry || undefined,
-          language: 'es'
+          language: 'es',
+          selected_option: selectedOption || undefined
         },
         {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
 
-      const assistantMessage = {
-        role: 'assistant',
-        content: response.data.response,
-        sources: response.data.sources,
-        options: response.data.suggested_questions?.length > 0 
-          ? response.data.suggested_questions.slice(0, 4)
-          : null
-      };
+      // Verificar si se necesita clarificación
+      if (response.data.needs_clarification && response.data.clarification_request) {
+        const clarification = response.data.clarification_request;
+        const assistantMessage = {
+          role: 'assistant',
+          content: clarification.question,
+          isClarification: true,
+          clarificationOptions: clarification.options,
+          allowCustom: clarification.allow_custom,
+          customPlaceholder: clarification.custom_placeholder
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        const assistantMessage = {
+          role: 'assistant',
+          content: response.data.response,
+          sources: response.data.sources,
+          options: response.data.suggested_questions?.length > 0 
+            ? response.data.suggested_questions.slice(0, 4)
+            : null
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
 
-      setMessages(prev => [...prev, assistantMessage]);
+      // Actualizar contexto si viene en la respuesta
+      if (response.data.context) {
+        if (response.data.context.origin_country && !originCountry) {
+          setOriginCountry(response.data.context.origin_country);
+        }
+        if (response.data.context.destination_country && !destinationCountry) {
+          setDestinationCountry(response.data.context.destination_country);
+        }
+      }
+
       setSessionId(response.data.session_id);
       loadSessions();
     } catch (error) {
@@ -723,6 +853,7 @@ Cuanta más información me des, más precisa será la clasificación.`,
                 message={message} 
                 isUser={message.role === 'user'}
                 onOptionSelect={handleOptionSelect}
+                onClarificationSelect={handleClarificationSelect}
               />
             ))}
             

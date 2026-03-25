@@ -6,16 +6,31 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from documents_database import OFFICIAL_DOCUMENTS, DOCUMENT_CATEGORIES
 from customs_database import WORLDWIDE_CUSTOMS_DATABASE, TRADE_AGREEMENTS_INFO, GLOBAL_RESOURCES, TYPICAL_TARIFFS
+from notifications import (
+    send_tariff_alert, 
+    send_subscription_confirmation, 
+    TariffAlert, 
+    NotificationSubscription,
+    EmailNotification,
+    send_email_notification
+)
+from assistant_prompt import (
+    get_assistant_system_prompt,
+    get_country_risk,
+    get_all_country_risks,
+    COUNTRY_RISK_DATA
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -180,6 +195,18 @@ class ChatRequest(BaseModel):
     destination_country: Optional[str] = None
     product_description: Optional[str] = None
     language: str = "es"
+    selected_option: Optional[str] = None  # Para respuestas de selección múltiple
+
+class ChatOption(BaseModel):
+    id: str
+    label: str
+    value: str
+
+class ChatClarificationRequest(BaseModel):
+    question: str
+    options: List[ChatOption]
+    allow_custom: bool = True
+    custom_placeholder: str = "Escribe tu respuesta..."
 
 class ChatResponse(BaseModel):
     response: str
@@ -187,6 +214,8 @@ class ChatResponse(BaseModel):
     sources: List[dict]
     suggested_questions: List[str]
     context: Optional[dict] = None
+    needs_clarification: bool = False
+    clarification_request: Optional[ChatClarificationRequest] = None
 
 class CountryTradeInfo(BaseModel):
     origin_country: str
@@ -1589,9 +1618,112 @@ def build_country_context(origin_code: str, destination_code: str, language: str
     
     return context
 
+def detect_missing_info_for_clarification(message: str, context: dict) -> Optional[dict]:
+    """Detecta si falta información crítica y genera preguntas de clarificación con opciones"""
+    clarification = None
+    
+    message_lower = message.lower()
+    
+    # Palabras clave que indican consulta de importación/exportación
+    trade_keywords = ["importar", "exportar", "arancel", "aduana", "clasificar", "enviar", 
+                      "traer", "llevar", "comercio", "producto", "mercancía", "import", 
+                      "export", "tariff", "customs", "classify"]
+    
+    is_trade_query = any(kw in message_lower for kw in trade_keywords)
+    
+    if is_trade_query:
+        # Verificar si falta país de origen
+        if not context.get("origin_country"):
+            clarification = {
+                "question": "Para darte información precisa, necesito saber el país de origen. ¿De dónde sale la mercancía?",
+                "options": [
+                    {"id": "1", "label": "China", "value": "CN"},
+                    {"id": "2", "label": "Estados Unidos", "value": "US"},
+                    {"id": "3", "label": "Alemania", "value": "DE"},
+                    {"id": "4", "label": "México", "value": "MX"},
+                    {"id": "5", "label": "Colombia", "value": "CO"},
+                    {"id": "6", "label": "España", "value": "ES"},
+                    {"id": "7", "label": "Brasil", "value": "BR"},
+                    {"id": "8", "label": "Italia", "value": "IT"},
+                ],
+                "allow_custom": True,
+                "custom_placeholder": "Otro país (escríbelo aquí)...",
+                "info_type": "origin_country"
+            }
+            return clarification
+        
+        # Verificar si falta país de destino
+        if not context.get("destination_country"):
+            clarification = {
+                "question": "¿A qué país deseas enviar o importar la mercancía?",
+                "options": [
+                    {"id": "1", "label": "España", "value": "ES"},
+                    {"id": "2", "label": "Estados Unidos", "value": "US"},
+                    {"id": "3", "label": "Colombia", "value": "CO"},
+                    {"id": "4", "label": "México", "value": "MX"},
+                    {"id": "5", "label": "Chile", "value": "CL"},
+                    {"id": "6", "label": "Argentina", "value": "AR"},
+                    {"id": "7", "label": "Perú", "value": "PE"},
+                    {"id": "8", "label": "Alemania", "value": "DE"},
+                ],
+                "allow_custom": True,
+                "custom_placeholder": "Otro país (escríbelo aquí)...",
+                "info_type": "destination_country"
+            }
+            return clarification
+        
+        # Detectar si es una consulta de producto y no tenemos suficiente detalle
+        product_keywords = ["producto", "mercancía", "artículo", "bien", "item", "product", "goods"]
+        generic_terms = ["algo", "cosa", "esto", "eso", "producto", "mercancía"]
+        
+        if any(kw in message_lower for kw in product_keywords):
+            # Verificar si la descripción es muy genérica
+            words = message_lower.split()
+            if len(words) < 5 or any(term in message_lower for term in generic_terms):
+                clarification = {
+                    "question": "Para clasificar correctamente, necesito más detalles sobre el producto. ¿Qué tipo de producto es?",
+                    "options": [
+                        {"id": "1", "label": "Alimentos y bebidas", "value": "food_beverages"},
+                        {"id": "2", "label": "Textiles y ropa", "value": "textiles_clothing"},
+                        {"id": "3", "label": "Electrónicos y tecnología", "value": "electronics"},
+                        {"id": "4", "label": "Maquinaria y equipos", "value": "machinery"},
+                        {"id": "5", "label": "Productos químicos", "value": "chemicals"},
+                        {"id": "6", "label": "Materias primas", "value": "raw_materials"},
+                        {"id": "7", "label": "Vehículos y partes", "value": "vehicles"},
+                        {"id": "8", "label": "Productos farmacéuticos", "value": "pharmaceuticals"},
+                    ],
+                    "allow_custom": True,
+                    "custom_placeholder": "Describe tu producto con más detalle...",
+                    "info_type": "product_type"
+                }
+                return clarification
+    
+    # Detectar consultas sobre requisitos específicos sin producto definido
+    requirement_keywords = ["requisito", "documento", "permiso", "certificado", "licencia", 
+                          "requirement", "document", "permit", "certificate", "license"]
+    
+    if any(kw in message_lower for kw in requirement_keywords) and not context.get("product_description"):
+        clarification = {
+            "question": "Los requisitos varían según el tipo de producto. ¿Qué categoría de producto te interesa?",
+            "options": [
+                {"id": "1", "label": "Productos agrícolas", "value": "agricultural"},
+                {"id": "2", "label": "Productos de origen animal", "value": "animal_origin"},
+                {"id": "3", "label": "Productos procesados", "value": "processed"},
+                {"id": "4", "label": "Productos industriales", "value": "industrial"},
+                {"id": "5", "label": "Productos peligrosos/regulados", "value": "regulated"},
+                {"id": "6", "label": "Productos de consumo general", "value": "consumer_goods"},
+            ],
+            "allow_custom": True,
+            "custom_placeholder": "Especifica el producto...",
+            "info_type": "product_category"
+        }
+        return clarification
+    
+    return None
+
 @api_router.post("/chat/message")
 async def chat_message(request: ChatRequest, user: dict = Depends(get_current_user)):
-    """Endpoint principal del chat conversacional internacional"""
+    """Endpoint principal del chat conversacional internacional con clarificación interactiva"""
     try:
         session_id = request.session_id or str(uuid.uuid4())
         
@@ -1603,6 +1735,7 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
                 "user_id": user["id"],
                 "messages": [],
                 "context": {},
+                "pending_clarification": None,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
         
@@ -1614,6 +1747,66 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
         if request.product_description:
             chat_history["context"]["product_description"] = request.product_description
         
+        # Manejar respuesta de clarificación si viene de una opción seleccionada
+        if request.selected_option and chat_history.get("pending_clarification"):
+            pending = chat_history["pending_clarification"]
+            info_type = pending.get("info_type")
+            
+            # Actualizar contexto según el tipo de información
+            if info_type == "origin_country":
+                chat_history["context"]["origin_country"] = request.selected_option
+            elif info_type == "destination_country":
+                chat_history["context"]["destination_country"] = request.selected_option
+            elif info_type in ["product_type", "product_category"]:
+                # Combinar con descripción existente o crear nueva
+                existing = chat_history["context"].get("product_description", "")
+                chat_history["context"]["product_description"] = f"{existing} {request.message}".strip()
+            
+            chat_history["pending_clarification"] = None
+        
+        # Detectar si necesitamos clarificación
+        clarification_needed = detect_missing_info_for_clarification(request.message, chat_history["context"])
+        
+        if clarification_needed and not request.selected_option:
+            # Guardar mensaje del usuario
+            chat_history["messages"].append({
+                "role": "user",
+                "content": request.message,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            # Guardar pregunta de clarificación como respuesta
+            chat_history["messages"].append({
+                "role": "assistant",
+                "content": clarification_needed["question"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "is_clarification": True
+            })
+            
+            chat_history["pending_clarification"] = clarification_needed
+            chat_history["updated_at"] = datetime.now(timezone.utc).isoformat()
+            
+            await db.chat_sessions.update_one(
+                {"session_id": session_id},
+                {"$set": chat_history},
+                upsert=True
+            )
+            
+            return {
+                "response": clarification_needed["question"],
+                "session_id": session_id,
+                "sources": [],
+                "suggested_questions": [],
+                "context": chat_history["context"],
+                "needs_clarification": True,
+                "clarification_request": {
+                    "question": clarification_needed["question"],
+                    "options": clarification_needed["options"],
+                    "allow_custom": clarification_needed["allow_custom"],
+                    "custom_placeholder": clarification_needed["custom_placeholder"]
+                }
+            }
+        
         # Construir contexto de países
         country_context = ""
         origin = chat_history["context"].get("origin_country")
@@ -1621,61 +1814,15 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
         if origin and destination:
             country_context = build_country_context(origin, destination, request.language)
         
-        # Sistema de prompt internacional
-        language_instructions = {
-            "es": "Responde siempre en español.",
-            "en": "Always respond in English.",
-            "fr": "Répondez toujours en français.",
-            "de": "Antworte immer auf Deutsch.",
-            "pt": "Responda sempre em português.",
-            "it": "Rispondi sempre in italiano.",
-            "nl": "Antwoord altijd in het Nederlands.",
-            "pl": "Zawsze odpowiadaj po polsku.",
-            "zh": "请用中文回答。",
-            "ja": "日本語で回答してください。",
-            "ko": "한국어로 답변해 주세요.",
-            "ar": "أجب دائماً باللغة العربية.",
-            "ru": "Всегда отвечайте на русском языке."
-        }
+        # Obtener historial de mensajes para contexto
+        chat_history_text = chr(10).join([f"{m['role']}: {m['content']}" for m in chat_history.get('messages', [])[-5:]])
         
-        lang_instruction = language_instructions.get(request.language, language_instructions["es"])
-        
-        system_prompt = f"""Eres TaricAI, un asistente experto en comercio internacional, clasificación arancelaria y regulaciones aduaneras a nivel mundial. {lang_instruction}
-
-CAPACIDADES:
-1. Clasificación arancelaria de productos (códigos HS/TARIC)
-2. Información sobre aranceles, impuestos y tasas entre países
-3. Requisitos fitosanitarios y no fitosanitarios
-4. Barreras de entrada y regulaciones
-5. Tratados comerciales vigentes
-6. Documentación requerida para importación/exportación
-7. Fuentes oficiales y autoridades competentes
-
-{country_context}
-
-RECURSOS GLOBALES:
-- WTO (Organización Mundial del Comercio): https://www.wto.org/
-- WCO (Organización Mundial de Aduanas): http://www.wcoomd.org/
-- IPPC (Convención Internacional de Protección Fitosanitaria): https://www.ippc.int/
-- ITC Market Access Map: https://www.macmap.org/
-
-REGLAS IMPORTANTES:
-1. SIEMPRE proporciona las fuentes oficiales de donde obtienes la información
-2. Si no tienes información actualizada, indica que el usuario debe verificar en la fuente oficial
-3. Sé específico sobre los requisitos según el tipo de producto
-4. Menciona los tratados comerciales aplicables que pueden reducir aranceles
-5. Advierte sobre posibles restricciones o prohibiciones
-6. Proporciona los enlaces a las autoridades competentes
-
-FORMATO DE RESPUESTA:
-- Usa encabezados claros
-- Lista los requisitos de forma estructurada
-- Incluye siempre una sección de "Fuentes Oficiales" al final
-- Si se necesita más información del usuario, formula preguntas claras
-
-Historial de la conversación:
-{chr(10).join([f"{m['role']}: {m['content']}" for m in chat_history.get('messages', [])[-5:]])}
-"""
+        # Usar el nuevo prompt del Asistente IA Pro
+        system_prompt = get_assistant_system_prompt(
+            language=request.language,
+            country_context=country_context,
+            chat_history_text=chat_history_text
+        )
         
         # Llamar a la IA
         chat = LlmChat(
@@ -1730,7 +1877,6 @@ Historial de la conversación:
         if not origin or not destination:
             suggested_questions.append("¿Cuál es el país de origen y destino de tu operación?")
         else:
-            product = chat_history["context"].get("product_description", "")
             suggested_questions = [
                 f"¿Cuáles son los aranceles para exportar de {origin_info.get('name', origin) if origin_info else origin} a {dest_info.get('name', destination) if dest_info else destination}?",
                 "¿Qué documentos necesito para esta importación?",
@@ -1755,6 +1901,7 @@ Historial de la conversación:
         })
         
         chat_history["updated_at"] = datetime.now(timezone.utc).isoformat()
+        chat_history["pending_clarification"] = None
         
         # Actualizar en base de datos
         await db.chat_sessions.update_one(
@@ -1768,7 +1915,9 @@ Historial de la conversación:
             "session_id": session_id,
             "sources": sources,
             "suggested_questions": suggested_questions,
-            "context": chat_history["context"]
+            "context": chat_history["context"],
+            "needs_clarification": False,
+            "clarification_request": None
         }
         
     except Exception as e:
@@ -2188,6 +2337,466 @@ async def download_document(doc_id: str):
         filename=file_info["filename"],
         media_type=file_info["media_type"]
     )
+
+# ============== NOTIFICACIONES Y ALERTAS ==============
+
+class AlertSubscriptionCreate(BaseModel):
+    hs_codes: List[str]
+    countries: List[str]
+    email_notifications: bool = True
+
+class BatchClassificationRequest(BaseModel):
+    products: List[dict]  # Lista de productos con description, origin, destination
+    notify_on_complete: bool = False
+
+class UsageStatsRequest(BaseModel):
+    period: str = "monthly"  # daily, weekly, monthly, yearly
+
+@api_router.post("/alerts/subscribe")
+async def subscribe_to_alerts(
+    subscription: AlertSubscriptionCreate, 
+    user: dict = Depends(get_current_user)
+):
+    """Suscribirse a alertas de cambios arancelarios"""
+    try:
+        subscription_doc = {
+            "user_id": user["id"],
+            "email": user["email"],
+            "hs_codes": subscription.hs_codes,
+            "countries": subscription.countries,
+            "email_notifications": subscription.email_notifications,
+            "active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Upsert - actualizar si existe o crear nuevo
+        await db.alert_subscriptions.update_one(
+            {"user_id": user["id"]},
+            {"$set": subscription_doc},
+            upsert=True
+        )
+        
+        # Enviar email de confirmación
+        if subscription.email_notifications:
+            await send_subscription_confirmation(
+                recipient_email=user["email"],
+                user_name=user.get("name", "Usuario"),
+                hs_codes=subscription.hs_codes,
+                countries=subscription.countries
+            )
+        
+        return {
+            "status": "success",
+            "message": "Suscripción a alertas creada correctamente",
+            "monitored_codes": len(subscription.hs_codes),
+            "monitored_countries": len(subscription.countries)
+        }
+    except Exception as e:
+        logger.error(f"Error creating subscription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/alerts/subscription")
+async def get_alert_subscription(user: dict = Depends(get_current_user)):
+    """Obtener la suscripción actual del usuario"""
+    subscription = await db.alert_subscriptions.find_one(
+        {"user_id": user["id"]},
+        {"_id": 0}
+    )
+    if not subscription:
+        return {"subscription": None, "active": False}
+    return {"subscription": subscription, "active": subscription.get("active", False)}
+
+@api_router.delete("/alerts/unsubscribe")
+async def unsubscribe_from_alerts(user: dict = Depends(get_current_user)):
+    """Cancelar suscripción a alertas"""
+    await db.alert_subscriptions.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "success", "message": "Suscripción cancelada"}
+
+@api_router.post("/alerts/test-email")
+async def send_test_alert(user: dict = Depends(get_current_user)):
+    """Enviar un email de prueba para verificar la configuración"""
+    test_alert = TariffAlert(
+        hs_code="1801.00.00",
+        product_description="Cacao en grano, entero o partido, crudo o tostado",
+        old_rate="6.1%",
+        new_rate="4.0%",
+        country="España (UE)",
+        effective_date=datetime.now(timezone.utc).strftime("%d/%m/%Y"),
+        source_url="https://ec.europa.eu/taxation_customs/dds2/taric/"
+    )
+    
+    result = await send_tariff_alert(
+        recipient_email=user["email"],
+        user_name=user.get("name", "Usuario"),
+        alert=test_alert
+    )
+    
+    return result
+
+# ============== CLASIFICACIÓN POR LOTES ==============
+
+@api_router.post("/taric/batch-classify")
+async def batch_classify_products(
+    request: BatchClassificationRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Clasificación de productos por lotes (batch)"""
+    if len(request.products) > 50:
+        raise HTTPException(status_code=400, detail="Máximo 50 productos por lote")
+    
+    results = []
+    successful = 0
+    failed = 0
+    
+    for idx, product in enumerate(request.products):
+        try:
+            description = product.get("description", "")
+            origin = product.get("origin_country", "")
+            destination = product.get("destination_country", "ES")
+            
+            if not description:
+                results.append({
+                    "index": idx,
+                    "status": "error",
+                    "error": "Descripción vacía"
+                })
+                failed += 1
+                continue
+            
+            # Realizar clasificación
+            classification_prompt = f"""Clasifica el siguiente producto en el Sistema Armonizado (HS):
+
+Producto: {description}
+País de Origen: {origin}
+País de Destino: {destination}
+
+Responde SOLO con un JSON válido con esta estructura exacta:
+{{
+    "taric_code": "XXXXXXXX",
+    "description": "Descripción oficial del código",
+    "chapter": "XX",
+    "heading": "XXXX",
+    "confidence": "Alta/Media/Baja"
+}}"""
+            
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"batch-{user['id']}-{idx}",
+                system_message="Eres un experto en clasificación arancelaria del Sistema Armonizado. Responde solo con JSON válido."
+            ).with_model("openai", "gpt-5.2")
+            
+            ai_response = await chat.send_message(UserMessage(text=classification_prompt))
+            response_text = ai_response if isinstance(ai_response, str) else str(ai_response)
+            
+            # Parse response
+            try:
+                # Limpiar la respuesta para obtener solo el JSON
+                clean_response = response_text.strip()
+                
+                # Si tiene bloques de código markdown, extraer el contenido
+                if "```json" in clean_response:
+                    clean_response = clean_response.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_response:
+                    parts = clean_response.split("```")
+                    if len(parts) >= 2:
+                        clean_response = parts[1].strip()
+                
+                # Intentar parsear directamente
+                classification = json.loads(clean_response)
+                
+                results.append({
+                    "index": idx,
+                    "status": "success",
+                    "product_description": description,
+                    "taric_code": classification.get("taric_code", ""),
+                    "taric_description": classification.get("description", ""),
+                    "confidence": classification.get("confidence", "Media")
+                })
+                successful += 1
+            except Exception as parse_error:
+                logger.error(f"Batch parse error: {str(parse_error)} - Response: {response_text[:100]}")
+                results.append({
+                    "index": idx,
+                    "status": "partial",
+                    "product_description": description,
+                    "raw_response": response_text[:200],
+                    "parse_error": str(parse_error)
+                })
+                failed += 1
+                
+        except Exception as e:
+            results.append({
+                "index": idx,
+                "status": "error",
+                "error": str(e)
+            })
+            failed += 1
+    
+    # Guardar resultados del lote
+    batch_doc = {
+        "batch_id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "organization_id": user.get("organization_id"),
+        "total_products": len(request.products),
+        "successful": successful,
+        "failed": failed,
+        "results": results,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.batch_classifications.insert_one(batch_doc)
+    
+    return {
+        "batch_id": batch_doc["batch_id"],
+        "total": len(request.products),
+        "successful": successful,
+        "failed": failed,
+        "results": results
+    }
+
+# ============== ESTADÍSTICAS Y DASHBOARD ==============
+
+@api_router.get("/stats/usage")
+async def get_usage_statistics(
+    period: str = "monthly",
+    user: dict = Depends(get_current_user)
+):
+    """Obtener estadísticas de uso para gráficos del dashboard"""
+    try:
+        org_id = user.get("organization_id")
+        
+        # Determinar rango de fechas
+        now = datetime.now(timezone.utc)
+        if period == "daily":
+            days_back = 30
+        elif period == "weekly":
+            days_back = 84  # 12 semanas
+        elif period == "yearly":
+            days_back = 365
+        else:  # monthly
+            days_back = 365
+        
+        start_date = now - timedelta(days=days_back)
+        
+        # Búsquedas por período
+        pipeline_searches = [
+            {
+                "$match": {
+                    "organization_id": org_id,
+                    "created_at": {"$gte": start_date.isoformat()}
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d" if period == "daily" else "%Y-%m" if period == "monthly" else "%Y-W%V",
+                            "date": {"$dateFromString": {"dateString": "$created_at"}}
+                        }
+                    },
+                    "count": {"$sum": 1}
+                }
+            },
+            {"$sort": {"_id": 1}}
+        ]
+        
+        searches_data = await db.taric_results.aggregate(pipeline_searches).to_list(100)
+        
+        # Productos más clasificados
+        pipeline_products = [
+            {
+                "$match": {
+                    "organization_id": org_id,
+                    "created_at": {"$gte": start_date.isoformat()}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$taric_code",
+                    "count": {"$sum": 1},
+                    "description": {"$first": "$product_description"}
+                }
+            },
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        
+        top_products = await db.taric_results.aggregate(pipeline_products).to_list(10)
+        
+        # Países más consultados
+        pipeline_countries_origin = [
+            {
+                "$match": {
+                    "organization_id": org_id,
+                    "created_at": {"$gte": start_date.isoformat()},
+                    "origin_country": {"$exists": True, "$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$origin_country",
+                    "count": {"$sum": 1}
+                }
+            },
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        
+        pipeline_countries_dest = [
+            {
+                "$match": {
+                    "organization_id": org_id,
+                    "created_at": {"$gte": start_date.isoformat()},
+                    "destination_country": {"$exists": True, "$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$destination_country",
+                    "count": {"$sum": 1}
+                }
+            },
+            {"$sort": {"count": -1}},
+            {"$limit": 10}
+        ]
+        
+        origin_countries = await db.taric_results.aggregate(pipeline_countries_origin).to_list(10)
+        dest_countries = await db.taric_results.aggregate(pipeline_countries_dest).to_list(10)
+        
+        # Actividad por usuario (solo admin)
+        user_activity = []
+        if user.get("role") == "admin":
+            pipeline_users = [
+                {
+                    "$match": {
+                        "organization_id": org_id,
+                        "created_at": {"$gte": start_date.isoformat()}
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$user_id",
+                        "count": {"$sum": 1}
+                    }
+                },
+                {"$sort": {"count": -1}},
+                {"$limit": 10}
+            ]
+            user_activity = await db.taric_results.aggregate(pipeline_users).to_list(10)
+        
+        return {
+            "period": period,
+            "searches_timeline": [{"date": s["_id"], "count": s["count"]} for s in searches_data],
+            "top_products": [{"code": p["_id"], "count": p["count"], "description": p.get("description", "")[:50]} for p in top_products],
+            "origin_countries": [{"country": c["_id"], "count": c["count"]} for c in origin_countries],
+            "destination_countries": [{"country": c["_id"], "count": c["count"]} for c in dest_countries],
+            "user_activity": user_activity if user.get("role") == "admin" else []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching usage stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/stats/summary")
+async def get_stats_summary(user: dict = Depends(get_current_user)):
+    """Resumen de estadísticas para el dashboard"""
+    try:
+        org_id = user.get("organization_id")
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Total histórico
+        total_searches = await db.taric_results.count_documents({"organization_id": org_id})
+        
+        # Este mes
+        month_searches = await db.taric_results.count_documents({
+            "organization_id": org_id,
+            "created_at": {"$gte": month_start.isoformat()}
+        })
+        
+        # Estudios de mercado
+        total_studies = await db.market_studies.count_documents({"organization_id": org_id})
+        
+        # Sesiones de chat
+        total_chats = await db.chat_sessions.count_documents({"user_id": user["id"]})
+        
+        # Lotes procesados
+        total_batches = await db.batch_classifications.count_documents({"organization_id": org_id})
+        
+        # Códigos únicos clasificados
+        unique_codes = await db.taric_results.distinct("taric_code", {"organization_id": org_id})
+        
+        return {
+            "total_searches": total_searches,
+            "month_searches": month_searches,
+            "total_studies": total_studies,
+            "total_chats": total_chats,
+            "total_batches": total_batches,
+            "unique_codes": len(unique_codes),
+            "period": "current_month"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching stats summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== RIESGO PAÍS (estilo CESCE) ==============
+
+@api_router.get("/risk/country/{country_code}")
+async def get_country_risk_endpoint(country_code: str):
+    """Obtiene el riesgo de un país específico"""
+    risk = get_country_risk(country_code)
+    return risk
+
+@api_router.get("/risk/all-countries")
+async def get_all_countries_risk():
+    """Obtiene los datos de riesgo de todos los países para el mapa"""
+    return get_all_country_risks()
+
+@api_router.get("/risk/compare/{origin}/{destination}")
+async def compare_country_risk(origin: str, destination: str):
+    """Compara el riesgo entre país de origen y destino"""
+    origin_risk = get_country_risk(origin)
+    dest_risk = get_country_risk(destination)
+    
+    # Calcular riesgo combinado de la operación
+    combined_level = max(origin_risk["risk_level"], dest_risk["risk_level"])
+    
+    # Alertas especiales
+    alerts = []
+    if origin_risk.get("has_sanctions"):
+        alerts.append(f"⚠️ ALERTA: {origin} tiene sanciones internacionales activas")
+    if dest_risk.get("has_sanctions"):
+        alerts.append(f"⚠️ ALERTA: {destination} tiene sanciones internacionales activas")
+    if origin_risk.get("has_conflict"):
+        alerts.append(f"⚠️ ALERTA: {origin} tiene conflicto activo")
+    if dest_risk.get("has_conflict"):
+        alerts.append(f"⚠️ ALERTA: {destination} tiene conflicto activo")
+    
+    return {
+        "origin": origin_risk,
+        "destination": dest_risk,
+        "combined_risk_level": combined_level,
+        "operation_viable": combined_level < 7,
+        "alerts": alerts,
+        "recommendation": get_risk_recommendation(combined_level)
+    }
+
+def get_risk_recommendation(level: int) -> str:
+    """Genera recomendación basada en el nivel de riesgo"""
+    recommendations = {
+        1: "Operación con riesgo mínimo. Proceder con procedimientos estándar.",
+        2: "Operación de bajo riesgo. Verificar documentación estándar.",
+        3: "Riesgo moderado. Verificar requisitos específicos y seguros.",
+        4: "Riesgo alto. Considerar seguros de crédito y verificar solvencia.",
+        5: "Riesgo muy alto. Evaluar cuidadosamente. Recomendable seguro de CESCE.",
+        6: "Riesgo extremo. Operación no recomendable sin garantías especiales.",
+        7: "PROHIBIDO: País bajo sanciones. Operación no permitida."
+    }
+    return recommendations.get(level, "Sin recomendación disponible")
 
 # Include router and middleware
 app.include_router(api_router)

@@ -1,236 +1,192 @@
-# TaricAI - Product Requirements Document
-## Última actualización: 22 Marzo 2026
+# TaricAI - PRD (Product Requirements Document)
+## Plataforma de Comercio Internacional con IA
 
-## Original Problem Statement
-Crear una aplicación SaaS donde se pueda leer el TARIC y con inteligencia artificial se pueda colocar simplemente una palabra del TARIC de mi producto y se pueda sacar la nomenclatura arancelaria con sitios oficiales del TARIC español o de la Unión Europea. Adicional a eso, créale el portal donde le bote de una vez los aranceles, todos los tributos y los documentos que necesita para poder traer ese producto, todo en un solo lugar y sacado de sitios oficiales de España y de la unión europea.
-
-**Actualización (Marzo 2026):** Hacer TaricAI internacional, con información de régimen arancelario entre países, requisitos fitosanitarios, barreras de entrada, tratados comerciales, y una interfaz conversacional tipo chat.
-
-## Target Users
-- Agencias de aduanas
-- Importadores/Exportadores
-- Empresas B2B de comercio internacional
-- Consultores de comercio exterior
-
-## Tech Stack
-- **Backend**: FastAPI, Python, MongoDB
-- **Frontend**: React, Tailwind CSS, Shadcn/UI
-- **AI**: emergentintegrations (GPT-5.2 para texto y visión)
-- **Auth**: JWT tokens
+**Última actualización:** 25 de Marzo, 2026
 
 ---
 
-## Implementation Status
+## 1. Visión del Producto
 
-### Phase 1: MVP ✅ COMPLETED
-- User authentication (register/login/JWT)
-- Basic TARIC search with AI
-- Official sources integration
-- Tariffs and document checklist
+TaricAI es una plataforma SaaS de comercio internacional impulsada por IA que permite a empresas, agentes de aduanas e importadores/exportadores:
 
-### Phase 2: B2B Features ✅ COMPLETED
-- Organization/Team management
-- Search history per organization
-- Client reference tracking
-- Trade agreements detection
-
-### Phase 3: Advanced AI Features ✅ COMPLETED
-- **Image Classification**: Upload product photo → AI describes → Classify
-- **Market Study with PESTEL**: Generate professional market reports, downloadable as PDF
-- **AI Clarification Questions**: If description is vague, AI asks BEFORE classification
-- **Internationalization (i18n)**: 38+ languages
-
-### Phase 4: Multi-Language Expansion ✅ COMPLETED (Dec 2025)
-- **Expanded Language Support**: 38+ languages
-- **Multi-language AI Responses**
-- **Improved Language Selector** with search
-
-### Phase 5: International Trade Platform ✅ COMPLETED (Mar 2026)
-#### 5.1 Base de Datos Mundial de Aduanas
-- **65 países** con información detallada:
-  - Autoridades aduaneras oficiales
-  - Bases de datos arancelarias
-  - Autoridades fitosanitarias
-  - Requisitos de importación
-  - IVA/VAT rates
-  - Moneda y notas especiales
-- **Regiones cubiertas**: Europa (UE y no UE), América del Norte, Latinoamérica, Asia, Medio Oriente, África, Oceanía
-
-#### 5.2 Tratados Comerciales
-- **10 tratados principales** con detalles:
-  - EU Single Market, USMCA, RCEP, CPTPP, AfCFTA, MERCOSUR, Pacific Alliance, ASEAN, GCC, EFTA
-- Detección automática de tratados aplicables entre países
-
-#### 5.3 Chat Conversacional Internacional
-- Interfaz tipo Claude/ChatGPT para consultas
-- Selección de país origen y destino
-- Historial de conversaciones por sesión
-- Preguntas sugeridas contextuales
-- Fuentes oficiales en cada respuesta
-- Soporte multi-idioma
-
-#### 5.4 Mapa Mundial Interactivo ✅ COMPLETED
-- Mapa SVG interactivo con 65+ países
-- Colores por región (Europa azul, América verde, Asia naranja, África púrpura, Oceanía rosa)
-- Click en país para ver información comercial detallada
-- Panel lateral con:
-  - Autoridad aduanera y enlace oficial
-  - Base de datos arancelaria
-  - Autoridad fitosanitaria
-  - Información fiscal (IVA, moneda)
-  - Requisitos de importación
-  - Tratados comerciales
-  - Notas especiales
-- Controles de zoom y navegación
-- Leyenda de regiones
-
-#### 5.5 Simulador de Costos de Importación ✅ NEW
-- Wizard de 3 pasos: Mercancía → Transporte → Resultados
-- Calcula automáticamente:
-  - Valor CIF (FOB + Flete + Seguro)
-  - Aranceles según código HS y origen
-  - IVA/VAT del país de destino
-  - Otros costos (agente aduanal, almacenaje, documentación)
-  - Costo total de importación
-  - Precio unitario final
-- Detecta tratados comerciales aplicables
-- Muestra documentos requeridos
-- Fuentes oficiales de cada país
-
-#### 5.6 Landing Page Profesional ✅ UPDATED
-- Enfoque en comercio internacional global
-- Estadísticas: 65+ países, 10+ tratados, 21K+ códigos
-- Fuentes oficiales: TARIC UE, CBP USA, DIAN, SAT, GACC, WTO
-- Mensaje dirigido a agencias de aduanas, importadores y exportadores de todos los tamaños
-
-#### 5.7 Tratados Comerciales Expandidos ✅ NEW
-- 25+ tratados comerciales:
-  - EU Single Market, USMCA, RCEP, CPTPP, AfCFTA
-  - MERCOSUR, Pacific Alliance, CAN (Comunidad Andina)
-  - ASEAN, GCC, EFTA, COMESA, ECOWAS, EAC, SACU, SADC
-  - EU-Colombia/Peru/Ecuador, US-Colombia TPA
-  - EU-Japan EPA, EU-Canada CETA, EU-UK TCA
-  - China-ASEAN FTA, India-ASEAN FTA
-  - UK-Australia FTA, Australia-China FTA
+- Clasificar productos usando códigos HS/TARIC con IA
+- Obtener información arancelaria de 65+ países
+- Acceder a requisitos fitosanitarios y documentación necesaria
+- Simular costos de importación
+- Consultar tratados comerciales vigentes
+- Evaluar el riesgo país de operaciones comerciales
 
 ---
 
-## API Endpoints
+## 2. Características Implementadas
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/me` - Get current user
+### 2.1 Core (Completado)
+- ✅ Autenticación JWT con roles (admin/user)
+- ✅ Clasificación arancelaria por texto con GPT-5.2
+- ✅ Clasificación por imagen
+- ✅ Historial de clasificaciones
+- ✅ Sistema multi-organización
 
-### TARIC Classification
-- `POST /api/taric/search` - Main classification
-- `POST /api/taric/check-clarification` - Pre-check clarification
-- `GET /api/taric/history` - Get search history
-- `GET /api/taric/result/{id}` - Get specific result
-- `DELETE /api/taric/history/{id}` - Delete from history
+### 2.2 Módulos Internacionales (Completado)
+- ✅ Base de datos de 65+ países con normativas aduaneras
+- ✅ Información de tratados comerciales (UE, CAN, Mercosur, CPTPP, etc.)
+- ✅ Requisitos fitosanitarios por país
+- ✅ Enlaces a autoridades oficiales
 
-### Advanced Features
-- `POST /api/image/analyze` - Analyze product image
-- `POST /api/market/study` - Generate PESTEL market study
+### 2.3 Chat Conversacional IA (Completado - Actualizado 25/03/2026)
+- ✅ Asistente IA Pro con prompt profesional completo
+- ✅ Preguntas de clarificación con opciones múltiples
+- ✅ Soporte multi-idioma (13 idiomas)
+- ✅ Contexto de conversación persistente
+- ✅ Ya NO compara siempre con España/UE - usa fuentes específicas del país
+- ✅ Formato de respuesta estructurado con Risk Score
 
-### International Trade (NEW)
-- `POST /api/chat/message` - Chat conversacional
-- `GET /api/chat/sessions` - Listar sesiones de chat
-- `GET /api/chat/session/{id}` - Obtener sesión específica
-- `DELETE /api/chat/session/{id}` - Eliminar sesión
-- `POST /api/trade/country-info` - Info comercial entre países
-- `GET /api/countries/list` - Listar todos los países
-- `GET /api/country/{code}` - Detalles de un país
-- `GET /api/trade-agreements/list` - Listar tratados comerciales
+### 2.4 Mapa Mundial Interactivo (Completado - Actualizado 25/03/2026)
+- ✅ Visualización por regiones (Europa, América, Asia, África, Oceanía)
+- ✅ **NUEVO: Modo Riesgo País (estilo CESCE)**
+  - Niveles 1-7 con colores distintivos
+  - Alertas de sanciones y conflictos
+  - Recomendaciones de operación
+- ✅ Panel de información detallada por país
+- ✅ Selección rápida de origen/destino
 
-### Team Management
-- `GET /api/team/members` - List team members
-- `POST /api/team/invite` - Invite new member
-- `DELETE /api/team/members/{id}` - Remove member
-- `GET /api/team/stats` - Organization statistics
+### 2.5 Simulador de Costos de Importación (Completado)
+- ✅ Cálculo de valor CIF
+- ✅ Desglose de aranceles e impuestos
+- ✅ Costos adicionales (agente aduanal, almacenaje, documentación)
+- ✅ Exportación de resultados
 
-### Documents
-- `GET /api/documents/list` - Listar documentos descargables
-- `GET /api/documents/download/{id}` - Descargar documento
+### 2.6 Dashboard de Estadísticas (Completado)
+- ✅ Gráficos de actividad por período (diario, semanal, mensual)
+- ✅ Top productos clasificados
+- ✅ Países de origen/destino más consultados
+- ✅ Resumen de uso mensual
 
----
+### 2.7 Clasificación por Lotes (Completado)
+- ✅ Hasta 50 productos por lote
+- ✅ Carga desde CSV/TXT
+- ✅ Resultados exportables a Excel
+- ✅ Indicadores de confianza
 
-## Key Files
-- `/app/backend/server.py` - Backend principal (endpoints de clasificación, chat, simulador de costos)
-- `/app/backend/customs_database.py` - Base de datos de 65 países y 25+ tratados comerciales
-- `/app/frontend/src/pages/DashboardPage.jsx` - Dashboard principal
-- `/app/frontend/src/pages/InternationalChatPage.jsx` - Chat conversacional
-- `/app/frontend/src/pages/LandingPage.jsx` - Landing page profesional
-- `/app/frontend/src/components/WorldTradeMap.jsx` - Mapa mundial interactivo
-- `/app/frontend/src/components/ImportCostSimulator.jsx` - Simulador de costos de importación (NEW)
-- `/app/frontend/src/components/ImageClassifier.jsx` - Clasificación por imagen
-- `/app/frontend/src/components/MarketStudyPanel.jsx` - Estudios de mercado
+### 2.8 Sistema de Alertas (Completado)
+- ✅ Suscripción a cambios arancelarios
+- ✅ Monitoreo por códigos HS y países
+- ✅ Integración con Resend para emails
+- ✅ Email de prueba para verificación
 
----
+### 2.9 Exportación a Excel (Completado)
+- ✅ Exportación de clasificaciones con fórmulas visibles
+- ✅ Exportación de historial completo
+- ✅ Desglose de costos con cálculos
 
-## Documentos Generados
-- `/app/TaricAI_PitchDeck_Inversores.pdf` - Presentación para inversores
-- `/app/TaricAI_PitchDeck_Inversores.docx` - Presentación Word
-- `/app/TaricAI_Plan_Financiero_Profesional.md` - Plan financiero 5 años
-- `/app/TaricAI_Analisis_Costos_Operativos.md` - Análisis de costos
+### 2.10 Integración ERP (Completado - Interfaz)
+- ✅ Panel de configuración para SAP, Oracle, Microsoft Dynamics
+- ✅ Opciones de autenticación (API Key, OAuth 2.0)
+- ✅ Mapeo de campos configurable
+- ⚠️ NOTA: Requiere configuración del cliente para funcionar
 
----
-
-## Países Soportados (65)
-
-### Europa - UE (24)
-ES (España), DE (Alemania), FR (Francia), IT (Italia), PT (Portugal), NL (Países Bajos), BE (Bélgica), PL (Polonia), SE (Suecia), AT (Austria), GR (Grecia), CZ (República Checa), RO (Rumania), HU (Hungría), IE (Irlanda), DK (Dinamarca), FI (Finlandia)
-
-### Europa - No UE (5)
-GB (Reino Unido), CH (Suiza), NO (Noruega), RU (Rusia), UA (Ucrania), TR (Turquía)
-
-### América del Norte (3)
-US (Estados Unidos), CA (Canadá), MX (México)
-
-### Latinoamérica (12)
-CO (Colombia), BR (Brasil), AR (Argentina), CL (Chile), PE (Perú), EC (Ecuador), UY (Uruguay), PY (Paraguay), BO (Bolivia), VE (Venezuela), PA (Panamá), CR (Costa Rica), GT (Guatemala), DO (República Dominicana), JM (Jamaica)
-
-### Asia (15)
-CN (China), JP (Japón), KR (Corea del Sur), TW (Taiwán), HK (Hong Kong), SG (Singapur), TH (Tailandia), VN (Vietnam), ID (Indonesia), MY (Malasia), PH (Filipinas), IN (India)
-
-### Medio Oriente (4)
-AE (Emiratos Árabes), SA (Arabia Saudita), IL (Israel), QA (Catar)
-
-### África (6)
-ZA (Sudáfrica), NG (Nigeria), EG (Egipto), MA (Marruecos), KE (Kenia), GH (Ghana)
-
-### Oceanía (2)
-AU (Australia), NZ (Nueva Zelanda)
+### 2.11 Documentación de Negocio (Completado)
+- ✅ Pitch Deck (PDF y Word)
+- ✅ Plan Financiero
+- ✅ Análisis de Costos Operativos
 
 ---
 
-## Próximas Tareas (Backlog)
+## 3. Arquitectura Técnica
 
-### P0 - Alta Prioridad
-1. **Notificaciones por email para cambios en aranceles** - Aprobado
-   - Usar SendGrid o Resend
-   - Trigger inmediato tras detección
-   - Seguimiento de productos clasificados
+### Backend (FastAPI)
+```
+/app/backend/
+├── server.py              # API principal (~2800 líneas)
+├── assistant_prompt.py    # Prompt del Asistente IA Pro + Riesgo País
+├── customs_database.py    # Base de datos de 65+ países
+├── documents_database.py  # Documentos oficiales
+├── notifications.py       # Sistema de emails con Resend
+└── requirements.txt
+```
 
-### P1 - Media Prioridad
-2. Dashboard con gráficos de uso mensual
-3. Clasificación de productos por lotes (batch)
-4. Exportar resultados a Excel
+### Frontend (React)
+```
+/app/frontend/src/
+├── pages/
+│   ├── DashboardPage.jsx        # Dashboard principal
+│   ├── InternationalChatPage.jsx # Chat IA con clarificación
+│   └── LandingPage.jsx          # Landing internacional
+├── components/
+│   ├── WorldTradeMap.jsx        # Mapa con modo riesgo
+│   ├── ImportCostSimulator.jsx  # Simulador de costos
+│   ├── UsageStatsPanel.jsx      # Gráficos de uso
+│   ├── BatchClassificationPanel.jsx # Clasificación por lotes
+│   ├── AlertSubscriptionPanel.jsx   # Alertas arancelarias
+│   └── ERPIntegration.jsx       # Configuración ERP
+├── utils/
+│   └── excelExport.js           # Exportación con fórmulas
+└── config/
+    ├── countries.js             # Configuración de países
+    └── i18n.js                  # Traducciones (13 idiomas)
+```
 
-### P2 - Baja Prioridad
-5. Integración con sistemas ERP
-6. App móvil
+### Integraciones
+- **OpenAI GPT-5.2** via Emergent LLM Key
+- **Resend** para notificaciones por email
+- **MongoDB** para persistencia
+- **react-simple-maps** para visualización geográfica
+- **xlsx (SheetJS)** para exportación Excel
 
 ---
 
-## Known Issues
-1. ~~Token inválido en clasificación por imagen~~ - RESUELTO (pasar token via props)
-2. Verificar que el usuario cierre sesión y vuelva a entrar para limpiar tokens antiguos
+## 4. Endpoints Principales
+
+### Clasificación
+- `POST /api/taric/classify` - Clasificación por texto
+- `POST /api/taric/classify-image` - Clasificación por imagen
+- `POST /api/taric/batch-classify` - Clasificación por lotes
+
+### Chat
+- `POST /api/chat/message` - Mensaje al Asistente IA Pro
+
+### Riesgo País
+- `GET /api/risk/country/{code}` - Riesgo de un país
+- `GET /api/risk/all-countries` - Todos los países
+- `GET /api/risk/compare/{origin}/{destination}` - Comparar países
+
+### Estadísticas
+- `GET /api/stats/usage` - Estadísticas de uso
+- `GET /api/stats/summary` - Resumen del mes
+
+### Alertas
+- `POST /api/alerts/subscribe` - Suscribirse a alertas
+- `GET /api/alerts/subscription` - Ver suscripción
+- `DELETE /api/alerts/unsubscribe` - Cancelar alertas
 
 ---
 
-## Costos Operativos Estimados
-- **MVP/Lanzamiento**: $85-150/mes
-- **Crecimiento (500 usuarios)**: $250-400/mes
-- **Escala (2,000+ usuarios)**: $600-1,200/mes
-- **Break-even**: 3-5 clientes pagando €49/mes
+## 5. Backlog y Próximas Funcionalidades
+
+### P1 - Próximas
+- [ ] Dashboard de análisis predictivo de aranceles
+- [ ] Integración con APIs de comercio (Trade Map, UN Comtrade)
+- [ ] Notificaciones push para móvil
+- [ ] Módulo de certificados de origen digital
+
+### P2 - Futuras
+- [ ] App móvil nativa (iOS/Android)
+- [ ] Integración con blockchain para trazabilidad
+- [ ] Módulo de logística y tracking
+- [ ] Marketplace de servicios aduaneros
+
+---
+
+## 6. Métricas de Éxito
+
+- **Precisión de clasificación:** >94%
+- **Tiempo de respuesta:** <3 segundos
+- **Uptime:** >99.5%
+- **Satisfacción del usuario:** >4.5/5
+
+---
+
+## 7. Contacto
+
+- **Plataforma:** https://arancelai.preview.emergentagent.com
+- **Soporte técnico:** Asistente IA Pro integrado

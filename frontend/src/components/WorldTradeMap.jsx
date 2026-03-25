@@ -271,6 +271,21 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
   const [position, setPosition] = useState({ coordinates: [0, 20], zoom: 1 });
   const [availableCountries, setAvailableCountries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [countryRisks, setCountryRisks] = useState({});
+  const [viewMode, setViewMode] = useState('region'); // 'region' o 'risk'
+
+  // Cargar datos de riesgo país
+  React.useEffect(() => {
+    const fetchCountryRisks = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/risk/all-countries`);
+        setCountryRisks(response.data);
+      } catch (error) {
+        console.log('Risk data not available');
+      }
+    };
+    fetchCountryRisks();
+  }, []);
 
   // Cargar lista de países disponibles
   React.useEffect(() => {
@@ -337,7 +352,12 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
       return "#0891b2"; // País hover - cyan más oscuro
     }
 
-    // Color por región
+    // Modo de vista: Riesgo País
+    if (viewMode === 'risk' && countryRisks[countryCode]) {
+      return countryRisks[countryCode].color || "#6B7280";
+    }
+
+    // Color por región (modo por defecto)
     const regionMap = {
       "ES": "Europa", "DE": "Europa", "FR": "Europa", "IT": "Europa", "PT": "Europa",
       "NL": "Europa", "BE": "Europa", "PL": "Europa", "SE": "Europa", "AT": "Europa",
@@ -359,6 +379,14 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
     return REGION_COLORS[region] || REGION_COLORS.default;
   };
 
+  // Obtener información de riesgo para tooltip
+  const getCountryRiskInfo = (countryCode) => {
+    if (countryRisks[countryCode]) {
+      return countryRisks[countryCode];
+    }
+    return null;
+  };
+
   return (
     <div className="relative w-full h-[600px] bg-slate-950 rounded-xl overflow-hidden border border-cyan-500/20">
       {/* Header */}
@@ -370,6 +398,29 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
         <p className="text-sm text-gray-400 mt-1">
           Haz clic en un país para ver información comercial detallada
         </p>
+        {/* Selector de modo de vista */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setViewMode('region')}
+            className={`px-3 py-1 text-xs rounded-full transition-all ${
+              viewMode === 'region' 
+                ? 'bg-cyan-500 text-white' 
+                : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+            }`}
+          >
+            Por Región
+          </button>
+          <button
+            onClick={() => setViewMode('risk')}
+            className={`px-3 py-1 text-xs rounded-full transition-all ${
+              viewMode === 'risk' 
+                ? 'bg-amber-500 text-white' 
+                : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+            }`}
+          >
+            Riesgo País
+          </button>
+        </div>
       </div>
 
       {/* Zoom Controls */}
@@ -402,42 +453,89 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
 
       {/* Legend */}
       <div className="absolute bottom-4 right-4 z-40 bg-slate-900/90 rounded-lg p-3 border border-cyan-500/20">
-        <p className="text-xs font-semibold text-gray-400 mb-2">Regiones</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Europa }}></div>
-            <span className="text-gray-300">Europa</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.América }}></div>
-            <span className="text-gray-300">América</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Asia }}></div>
-            <span className="text-gray-300">Asia</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.África }}></div>
-            <span className="text-gray-300">África</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Oceanía }}></div>
-            <span className="text-gray-300">Oceanía</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-cyan-500"></div>
-            <span className="text-gray-300">Seleccionado</span>
-          </div>
-        </div>
-        <p className="text-[10px] text-gray-500 mt-2">65 países con datos comerciales</p>
+        {viewMode === 'region' ? (
+          <>
+            <p className="text-xs font-semibold text-gray-400 mb-2">Regiones</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Europa }}></div>
+                <span className="text-gray-300">Europa</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.América }}></div>
+                <span className="text-gray-300">América</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Asia }}></div>
+                <span className="text-gray-300">Asia</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.África }}></div>
+                <span className="text-gray-300">África</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: REGION_COLORS.Oceanía }}></div>
+                <span className="text-gray-300">Oceanía</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-cyan-500"></div>
+                <span className="text-gray-300">Seleccionado</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs font-semibold text-amber-400 mb-2">Riesgo País (estilo CESCE)</p>
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#22C55E" }}></div>
+                <span className="text-gray-300">Muy Bajo (1)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#84CC16" }}></div>
+                <span className="text-gray-300">Bajo (2)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#EAB308" }}></div>
+                <span className="text-gray-300">Moderado (3)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#F97316" }}></div>
+                <span className="text-gray-300">Alto (4)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#EF4444" }}></div>
+                <span className="text-gray-300">Muy Alto (5-6)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: "#7F1D1D" }}></div>
+                <span className="text-gray-300">Prohibido (7)</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-500 mt-2">Basado en datos de CESCE y fuentes globales</p>
+          </>
+        )}
+        <p className="text-[10px] text-gray-500 mt-2">65+ países con datos comerciales</p>
       </div>
 
-      {/* Hovered Country Name */}
+      {/* Hovered Country Name with Risk Info */}
       {hoveredCountry && (
-        <div className="absolute top-20 left-4 z-40 bg-slate-900/90 px-3 py-1 rounded-full border border-cyan-500/30">
-          <span className="text-sm text-cyan-400">{hoveredCountry}</span>
+        <div className="absolute top-24 left-4 z-40 bg-slate-900/90 px-3 py-2 rounded-lg border border-cyan-500/30">
+          <span className="text-sm text-cyan-400 font-semibold">{hoveredCountry}</span>
           {COUNTRY_NAME_TO_CODE[hoveredCountry] && availableCountries.includes(COUNTRY_NAME_TO_CODE[hoveredCountry]) && (
-            <span className="text-xs text-gray-400 ml-2">• Datos disponibles</span>
+            <>
+              {viewMode === 'risk' && getCountryRiskInfo(COUNTRY_NAME_TO_CODE[hoveredCountry]) && (
+                <div className="mt-1 text-xs">
+                  <span 
+                    className="px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: getCountryRiskInfo(COUNTRY_NAME_TO_CODE[hoveredCountry]).color }}
+                  >
+                    Riesgo: {getCountryRiskInfo(COUNTRY_NAME_TO_CODE[hoveredCountry]).risk_name}
+                  </span>
+                </div>
+              )}
+              <span className="text-xs text-gray-400 ml-2">• Datos disponibles</span>
+            </>
           )}
         </div>
       )}
