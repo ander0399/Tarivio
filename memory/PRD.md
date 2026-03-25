@@ -34,12 +34,13 @@ TaricAI es una plataforma SaaS de comercio internacional impulsada por IA que pe
 - ✅ Enlaces a autoridades oficiales
 
 ### 2.3 Chat Conversacional IA (Completado - Actualizado 25/03/2026)
-- ✅ Asistente IA Pro con prompt profesional completo
-- ✅ Preguntas de clarificación con opciones múltiples
+- ✅ **PROMPT COMPLETO 16 MÓDULOS:** Asistente IA Pro con todas las capacidades profesionales
+- ✅ Preguntas de clarificación con opciones múltiples (A, B, C, D, Otro)
 - ✅ Soporte multi-idioma (13 idiomas)
 - ✅ Contexto de conversación persistente
 - ✅ Ya NO compara siempre con España/UE - usa fuentes específicas del país
 - ✅ Formato de respuesta estructurado con Risk Score
+- ✅ Módulos incluidos: Scoring de Riesgo, Landed Cost, Conversor Nomenclaturas, Incoterms, BTI/IAV, Valor Aduana, Regímenes Especiales, Formación, Auditoría, Comparador Orígenes, Timeline, Compliance, Divisas, Negociación, Análisis Predictivo, Comparador Bilateral
 
 ### 2.4 Mapa Mundial Interactivo (Completado - Actualizado 25/03/2026)
 - ✅ Visualización por regiones (Europa, América, Asia, África, Oceanía)
@@ -85,7 +86,22 @@ TaricAI es una plataforma SaaS de comercio internacional impulsada por IA que pe
 - ✅ Mapeo de campos configurable
 - ⚠️ NOTA: Requiere configuración del cliente para funcionar
 
-### 2.11 Documentación de Negocio (Completado)
+### 2.12 Estudio de Mercado Profesional (Completado - Actualizado 25/03/2026)
+- ✅ Análisis PESTEL completo (Político, Económico, Social, Tecnológico, Ambiental, Legal)
+- ✅ **NUEVO: Cita fuentes oficiales de comercio internacional:**
+  - UN Comtrade (comtrade.un.org)
+  - Trade Map (trademap.org)
+  - ICEX (icex.es) y DataComex (datacomex.comercio.es)
+  - World Bank (data.worldbank.org)
+  - WTO (wto.org)
+  - Access2Markets (trade.ec.europa.eu)
+- ✅ Tamaño de mercado con valor estimado y CAGR
+- ✅ Análisis de competidores con cuota de mercado
+- ✅ Tendencias, oportunidades y amenazas
+- ✅ Recomendaciones estratégicas accionables
+- ✅ Exportación a PDF profesional
+
+### 2.13 Documentación de Negocio (Completado)
 - ✅ Pitch Deck (PDF y Word)
 - ✅ Plan Financiero
 - ✅ Análisis de Costos Operativos
@@ -164,8 +180,9 @@ TaricAI es una plataforma SaaS de comercio internacional impulsada por IA que pe
 ## 5. Backlog y Próximas Funcionalidades
 
 ### P1 - Próximas
+- [x] ✅ **COMPLETADO:** Prompt completo del Asistente IA Pro (16 módulos)
+- [x] ✅ **COMPLETADO:** Estudio de mercado mejorado con fuentes oficiales (ICEX, UN Comtrade, Trade Map, DataComex, World Bank, WTO)
 - [ ] Dashboard de análisis predictivo de aranceles
-- [ ] Integración con APIs de comercio (Trade Map, UN Comtrade)
 - [ ] Notificaciones push para móvil
 - [ ] Módulo de certificados de origen digital
 
