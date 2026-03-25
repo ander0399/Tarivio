@@ -35,12 +35,15 @@ TaricAI es una plataforma SaaS de comercio internacional impulsada por IA que pe
 
 ### 2.3 Chat Conversacional IA (Completado - Actualizado 25/03/2026)
 - ✅ **PROMPT COMPLETO 16 MÓDULOS:** Asistente IA Pro con todas las capacidades profesionales
+- ✅ **ESTILO CONVERSACIONAL MEJORADO:** Respuestas naturales y fluidas como hablar con un experto
 - ✅ Preguntas de clarificación con opciones múltiples (A, B, C, D, Otro)
+- ✅ **Hace preguntas de seguimiento inteligentes** cuando necesita más información
+- ✅ **Responde en párrafos naturales**, no en listas rígidas
+- ✅ **Tono empático y profesional** - es un aliado, no una máquina
 - ✅ Soporte multi-idioma (13 idiomas)
 - ✅ Contexto de conversación persistente
 - ✅ Ya NO compara siempre con España/UE - usa fuentes específicas del país
-- ✅ Formato de respuesta estructurado con Risk Score
-- ✅ Módulos incluidos: Scoring de Riesgo, Landed Cost, Conversor Nomenclaturas, Incoterms, BTI/IAV, Valor Aduana, Regímenes Especiales, Formación, Auditoría, Comparador Orígenes, Timeline, Compliance, Divisas, Negociación, Análisis Predictivo, Comparador Bilateral
+- ✅ Módulos: Scoring de Riesgo, Landed Cost, Conversor Nomenclaturas, Incoterms, BTI/IAV, Valor Aduana, Regímenes Especiales, Formación, Auditoría, Comparador Orígenes, Timeline, Compliance, Divisas, Negociación, Análisis Predictivo, Comparador Bilateral
 
 ### 2.4 Mapa Mundial Interactivo (Completado - Actualizado 25/03/2026)
 - ✅ Visualización por regiones (Europa, América, Asia, África, Oceanía)
