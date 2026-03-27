@@ -33,6 +33,14 @@ from assistant_prompt import (
     get_all_country_risks,
     COUNTRY_RISK_DATA
 )
+from ports_database import (
+    get_ports_by_country,
+    get_port_info,
+    get_all_ports,
+    compare_ports,
+    get_recommended_port,
+    PORTS_DATABASE
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -3145,6 +3153,104 @@ async def get_chat_usage(days: int = 30, user: dict = Depends(get_current_user))
         "totals": totals,
         "cache_hit_rate_pct": cache_rate,
         "avg_cost_per_message_usd": round(totals["cost_usd"] / max(totals["messages"] - totals["cache_hits"], 1), 5)
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENDPOINTS DE PUERTOS Y COSTOS PORTUARIOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_router.get("/ports/all")
+async def get_all_ports_endpoint():
+    """Retorna todos los puertos disponibles"""
+    return get_all_ports()
+
+@api_router.get("/ports/country/{country_code}")
+async def get_ports_by_country_endpoint(country_code: str):
+    """Retorna todos los puertos de un país específico"""
+    ports = get_ports_by_country(country_code)
+    if not ports:
+        return {"ports": [], "message": f"No se encontraron puertos para {country_code}"}
+    return {"country": country_code, "ports": ports, "count": len(ports)}
+
+@api_router.get("/ports/{port_code}")
+async def get_port_info_endpoint(port_code: str):
+    """Retorna información detallada de un puerto"""
+    port = get_port_info(port_code)
+    if not port:
+        raise HTTPException(status_code=404, detail=f"Puerto {port_code} no encontrado")
+    return port
+
+@api_router.post("/ports/compare")
+async def compare_ports_endpoint(port_codes: List[str]):
+    """Compara múltiples puertos - retorna ordenados por costo"""
+    if len(port_codes) < 2:
+        raise HTTPException(status_code=400, detail="Se necesitan al menos 2 puertos para comparar")
+    
+    result = compare_ports(port_codes)
+    if not result:
+        raise HTTPException(status_code=404, detail="No se encontraron los puertos especificados")
+    
+    return {
+        "ports_compared": len(result),
+        "comparison": result,
+        "cheapest": result[0]["name"] if result else None,
+        "most_expensive": result[-1]["name"] if result else None
+    }
+
+@api_router.get("/ports/recommend/{country_code}")
+async def recommend_port_endpoint(country_code: str, cargo_type: str = "general"):
+    """Recomienda el mejor puerto para un país y tipo de carga"""
+    port = get_recommended_port(country_code, cargo_type)
+    if not port:
+        raise HTTPException(status_code=404, detail=f"No hay puertos disponibles para {country_code}")
+    
+    return {
+        "recommended_port": port,
+        "cargo_type": cargo_type,
+        "reason": f"Puerto recomendado basado en balance costo/eficiencia para carga {cargo_type}"
+    }
+
+@api_router.get("/ports/route/{origin_country}/{destination_country}")
+async def get_route_ports(origin_country: str, destination_country: str, cargo_type: str = "general"):
+    """Retorna los puertos recomendados para una ruta comercial completa"""
+    origin_ports = get_ports_by_country(origin_country)
+    dest_ports = get_ports_by_country(destination_country)
+    
+    recommended_origin = get_recommended_port(origin_country, cargo_type)
+    recommended_dest = get_recommended_port(destination_country, cargo_type)
+    
+    # Calcular costos totales estimados
+    total_20ft = 0
+    total_40ft = 0
+    if recommended_origin:
+        total_20ft += recommended_origin["costs_20ft"]["total_estimated"]
+        total_40ft += recommended_origin["costs_40ft"]["total_estimated"]
+    if recommended_dest:
+        total_20ft += recommended_dest["costs_20ft"]["total_estimated"]
+        total_40ft += recommended_dest["costs_40ft"]["total_estimated"]
+    
+    return {
+        "route": f"{origin_country} → {destination_country}",
+        "cargo_type": cargo_type,
+        "origin": {
+            "country": origin_country,
+            "available_ports": origin_ports,
+            "recommended": recommended_origin
+        },
+        "destination": {
+            "country": destination_country,
+            "available_ports": dest_ports,
+            "recommended": recommended_dest
+        },
+        "estimated_port_costs": {
+            "container_20ft_usd": total_20ft,
+            "container_40ft_usd": total_40ft,
+            "note": "Costos portuarios estimados (origen + destino). No incluye flete marítimo."
+        },
+        "free_zones": {
+            "origin": recommended_origin.get("free_zone_name") if recommended_origin else None,
+            "destination": recommended_dest.get("free_zone_name") if recommended_dest else None
+        }
     }
 
 # Include router and middleware
