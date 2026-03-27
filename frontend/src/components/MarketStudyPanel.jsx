@@ -56,8 +56,6 @@ export const MarketStudyPanel = ({
     setError(null);
 
     try {
-      console.log("Generating market study, token exists:", !!token);
-      
       const response = await axios({
         method: 'POST',
         url: `${API}/api/market/study`,
@@ -76,8 +74,6 @@ export const MarketStudyPanel = ({
         validateStatus: (status) => status < 500
       });
 
-      console.log("Response status:", response.status);
-
       if (response.status === 401) {
         throw new Error("Sesión expirada. Por favor recarga la página e inicia sesión de nuevo.");
       }
@@ -92,7 +88,6 @@ export const MarketStudyPanel = ({
         throw new Error("El estudio no contiene datos válidos. Intenta de nuevo.");
       }
 
-      console.log("Market study generated successfully");
       setStudy(response.data);
       setRetryCount(0);
 

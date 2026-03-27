@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
-import { 
-  Send, Bot, User, Globe, ExternalLink, MessageSquare, Trash2, 
-  Loader2, Info, ChevronRight, Package, FileText, Scale, 
+import {
+  Send, Bot, User, Globe, ExternalLink, MessageSquare, Trash2,
+  Loader2, Info, ChevronRight, Package, FileText, Scale,
   DollarSign, AlertTriangle, CheckCircle, Search, X, ArrowRight,
-  HelpCircle, Sparkles
+  HelpCircle, Sparkles, Clock, Zap
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -267,7 +267,7 @@ const ClarificationOptions = ({ options, allowCustom, customPlaceholder, onSelec
                 onChange={(e) => setCustomValue(e.target.value)}
                 placeholder={customPlaceholder || "Escribe tu respuesta..."}
                 className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-cyan-500"
-                onKeyPress={(e) => e.key === 'Enter' && handleCustomSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
                 autoFocus
                 data-testid="clarification-custom-input"
               />
@@ -295,7 +295,7 @@ const QuickOptions = ({ options, onSelect, type = 'button' }) => {
       {options.map((option, idx) => (
         <button
           key={idx}
-          onClick={() => onSelect(option.value || option)}
+          onClick={() => onSelect(option)}
           className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
             type === 'primary'
               ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600 shadow-lg shadow-cyan-500/20'
@@ -324,13 +324,13 @@ const ChatMessage = ({ message, isUser, onOptionSelect, onClarificationSelect })
           isUser 
             ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-md shadow-lg' 
             : message.isClarification
-              ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-gray-100 rounded-bl-md border border-amber-500/30'
+              ? 'bg-gradient-to-r from-cyan-900/30 to-blue-900/20 text-gray-100 rounded-bl-md border border-cyan-500/30'
               : 'bg-slate-800 text-gray-100 rounded-bl-md border border-slate-700'
         }`}>
           {message.isClarification && (
-            <div className="flex items-center gap-2 mb-2 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+            <div className="flex items-center gap-2 mb-2 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
               <HelpCircle className="w-3 h-3" />
-              Necesito más información
+              TaricAI pregunta
             </div>
           )}
           <div className="text-sm leading-relaxed prose prose-invert prose-sm max-w-none
@@ -413,8 +413,12 @@ export default function InternationalChatPage({ token }) {
   const [showSidebar, setShowSidebar] = useState(true);
   const [conversationStep, setConversationStep] = useState('welcome');
   const [productInfo, setProductInfo] = useState({});
+  const [aiUnavailable, setAiUnavailable] = useState(false);
+  const [resetCountdown, setResetCountdown] = useState(null); // seconds until retry
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const sendingRef = useRef(false); // Lock to prevent double-send race condition
+  const retryTimerRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -426,9 +430,22 @@ export default function InternationalChatPage({ token }) {
 
   useEffect(() => {
     loadSessions();
-    // Mensaje de bienvenida interactivo
     startWelcomeFlow();
+    checkAiStatus();
   }, []);
+
+  // Countdown timer when AI is unavailable
+  useEffect(() => {
+    if (resetCountdown === null) return;
+    if (resetCountdown <= 0) {
+      setAiUnavailable(false);
+      setResetCountdown(null);
+      localStorage.removeItem('taricai_budget_exceeded_at');
+      return;
+    }
+    retryTimerRef.current = setTimeout(() => setResetCountdown(s => s - 1), 1000);
+    return () => clearTimeout(retryTimerRef.current);
+  }, [resetCountdown]);
 
   const startWelcomeFlow = () => {
     setMessages([{
@@ -453,6 +470,23 @@ Puedo ayudarte con:
       optionType: 'button'
     }]);
     setConversationStep('welcome');
+  };
+
+  const checkAiStatus = () => {
+    // Check if a previous session recorded a budget exceeded error
+    const budgetExceededAt = localStorage.getItem('taricai_budget_exceeded_at');
+    if (budgetExceededAt) {
+      const elapsed = Math.floor((Date.now() - parseInt(budgetExceededAt)) / 1000);
+      const RESET_AFTER = 3600; // 1 hour estimated reset window
+      const remaining = RESET_AFTER - elapsed;
+      if (remaining > 0) {
+        setAiUnavailable(true);
+        setResetCountdown(remaining);
+      } else {
+        // Reset window passed — clear flag and let the user try again
+        localStorage.removeItem('taricai_budget_exceeded_at');
+      }
+    }
   };
 
   const loadSessions = async () => {
@@ -508,32 +542,19 @@ Puedo ayudarte con:
   };
 
   const handleOptionSelect = (option) => {
-    // Añadir mensaje del usuario
-    const userMessage = {
-      role: 'user',
-      content: typeof option === 'string' ? option : option.label || option
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    // Procesar la opción según el paso de la conversación
+    // Añadir el mensaje del usuario visualmente (para flujos welcome que no usan sendMessage)
+    const messageText = typeof option === 'string' ? option : option.label || option;
+    setMessages(prev => [...prev, { role: 'user', content: messageText }]);
     setTimeout(() => {
       processOption(option);
-    }, 500);
+    }, 100);
   };
 
-  // Manejar selección de opciones de clarificación
+  // Manejar selección de opciones de clarificación generadas por Claude
   const handleClarificationSelect = (label, value) => {
-    // Añadir respuesta del usuario al chat
-    const userMessage = {
-      role: 'user',
-      content: label
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    // Enviar mensaje con la opción seleccionada
-    setTimeout(() => {
-      sendMessage(label, value);
-    }, 300);
+    // Mostrar la selección del usuario en el chat, luego enviar sin re-añadir
+    setMessages(prev => [...prev, { role: 'user', content: label }]);
+    sendMessage(label, value, false);
   };
 
   const processOption = (option) => {
@@ -589,7 +610,9 @@ Primero necesito saber: ¿A qué país vas a exportar?`,
           }]);
           setConversationStep('agreements');
         } else {
-          sendMessage(typeof option === 'string' ? option : 'Tengo una pregunta general');
+          // handleOptionSelect ya añadió el mensaje — addToChat=false para no duplicar
+          const text = typeof option === 'string' ? option : (option.label || 'Tengo una pregunta general');
+          sendMessage(text, null, false);
         }
         break;
 
@@ -599,7 +622,8 @@ Primero necesito saber: ¿A qué país vas a exportar?`,
         break;
 
       default:
-        sendMessage(typeof option === 'string' ? option : option.label);
+        // El mensaje ya fue añadido por handleOptionSelect — addToChat=false para evitar duplicado
+        sendMessage(typeof option === 'string' ? option : option.label, null, false);
         break;
     }
   };
@@ -640,7 +664,7 @@ Cuanta más información me des, más precisa será la clasificación.`,
           }]);
           setConversationStep('select_destination');
         } else {
-          askProductType();
+          askProductType(country, destinationCountry);
         }
       }, 500);
     } else {
@@ -652,18 +676,20 @@ Cuanta más información me des, más precisa será la clasificación.`,
       }]);
 
       setTimeout(() => {
-        askProductType();
+        askProductType(originCountry, country);
       }, 500);
     }
   };
 
-  const askProductType = () => {
-    const originInfo = ALL_COUNTRIES.find(c => c.code === originCountry);
-    const destInfo = ALL_COUNTRIES.find(c => c.code === destinationCountry);
-    
+  const askProductType = (overrideOrigin, overrideDest) => {
+    const origin = overrideOrigin || originCountry;
+    const dest = overrideDest || destinationCountry;
+    const originInfo = ALL_COUNTRIES.find(c => c.code === origin);
+    const destInfo = ALL_COUNTRIES.find(c => c.code === dest);
+
     setMessages(prev => [...prev, {
       role: 'assistant',
-      content: `Operación: ${originInfo?.flag} ${originInfo?.name} → ${destInfo?.flag} ${destInfo?.name}
+      content: `Operación: ${originInfo?.flag || ''} ${originInfo?.name || origin} → ${destInfo?.flag || ''} ${destInfo?.name || dest}
 
 ¿Qué tipo de producto quieres clasificar?`,
       options: [
@@ -678,15 +704,13 @@ Cuanta más información me des, más precisa será la clasificación.`,
     setConversationStep('select_product_type');
   };
 
-  const sendMessage = async (messageText = inputMessage, selectedOption = null) => {
-    if (!messageText.trim() || isLoading) return;
+  const sendMessage = async (messageText = inputMessage, selectedOption = null, addToChat = true) => {
+    if (!messageText.trim() || isLoading || sendingRef.current) return;
 
-    const userMessage = {
-      role: 'user',
-      content: messageText
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    sendingRef.current = true;
+    if (addToChat) {
+      setMessages(prev => [...prev, { role: 'user', content: messageText }]);
+    }
     setInputMessage('');
     setIsLoading(true);
 
@@ -709,9 +733,14 @@ Cuanta más información me des, más precisa será la clasificación.`,
       // Verificar si se necesita clarificación
       if (response.data.needs_clarification && response.data.clarification_request) {
         const clarification = response.data.clarification_request;
+        // El texto explicativo va antes de la pregunta (solo si hay texto)
+        const explanationText = (response.data.response || '').trim();
+        const fullContent = explanationText
+          ? `${explanationText}\n\n**${clarification.question}**`
+          : `**${clarification.question}**`;
         const assistantMessage = {
           role: 'assistant',
-          content: clarification.question,
+          content: fullContent,
           isClarification: true,
           clarificationOptions: clarification.options,
           allowCustom: clarification.allow_custom,
@@ -741,12 +770,36 @@ Cuanta más información me des, más precisa será la clasificación.`,
       }
 
       setSessionId(response.data.session_id);
+      setConversationStep('chat'); // Entering free-chat mode; disable welcome-flow branch logic
       loadSessions();
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Error al enviar el mensaje. Intenta de nuevo.');
+      const detail = error.response?.data?.detail || '';
+      const status = error.response?.status;
+
+      if (detail === 'BUDGET_EXCEEDED' || status === 503) {
+        // Persist timestamp so banner survives page reloads
+        if (!localStorage.getItem('taricai_budget_exceeded_at')) {
+          localStorage.setItem('taricai_budget_exceeded_at', Date.now().toString());
+        }
+        setAiUnavailable(true);
+        setResetCountdown(3600);
+      } else if (status === 429) {
+        toast.error('Demasiadas solicitudes. Espera unos segundos e intenta de nuevo.');
+      } else if (status === 504) {
+        toast.error('La consulta tardó demasiado. Intenta con una pregunta más corta.');
+      } else {
+        const errMsg = detail || 'Error al enviar el mensaje. Intenta de nuevo.';
+        toast.error(errMsg);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `⚠️ ${errMsg}`,
+          isError: true
+        }]);
+      }
     } finally {
       setIsLoading(false);
+      sendingRef.current = false;
       inputRef.current?.focus();
     }
   };
@@ -893,6 +946,56 @@ Cuanta más información me des, más precisa será la clasificación.`,
           </div>
         </ScrollArea>
 
+        {/* AI Unavailable Banner */}
+        {aiUnavailable && (
+          <div className="border-t border-amber-500/30 bg-gradient-to-r from-amber-950/80 via-orange-950/60 to-amber-950/80 backdrop-blur-sm px-4 py-3">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center gap-3">
+                {/* Icon */}
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-amber-400" />
+                </div>
+
+                {/* Text content */}
+                <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+                  <p className="text-amber-300 font-semibold text-sm whitespace-nowrap">
+                    Asistente IA no disponible
+                  </p>
+                  <p className="text-amber-400/60 text-xs hidden sm:block">
+                    El cupo del período actual se ha agotado. Se restablece automáticamente.
+                  </p>
+                </div>
+
+                {/* Time badge */}
+                {resetCountdown !== null && resetCountdown > 0 && (() => {
+                  const availableAt = new Date(Date.now() + resetCountdown * 1000);
+                  const hh = String(availableAt.getHours()).padStart(2, '0');
+                  const mm = String(availableAt.getMinutes()).padStart(2, '0');
+                  return (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-xs font-mono font-bold text-amber-200 whitespace-nowrap flex-shrink-0">
+                      <Clock className="w-3 h-3 text-amber-400" />
+                      Vuelve a las {hh}:{mm}
+                    </span>
+                  );
+                })()}
+
+                {/* Dismiss */}
+                <button
+                  onClick={() => {
+                    setAiUnavailable(false);
+                    setResetCountdown(null);
+                    localStorage.removeItem('taricai_budget_exceeded_at');
+                  }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-amber-500/40 hover:text-amber-300 hover:bg-amber-500/10 flex-shrink-0 transition-all"
+                  title="Cerrar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Input */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
           <div className="max-w-3xl mx-auto">
@@ -902,16 +1005,16 @@ Cuanta más información me des, más precisa será la clasificación.`,
                   ref={inputRef}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Escribe tu pregunta sobre comercio internacional..."
+                  onKeyDown={handleKeyPress}
+                  placeholder={aiUnavailable ? "Servicio temporalmente no disponible..." : "Escribe tu pregunta sobre comercio internacional..."}
                   className="w-full bg-slate-800 border-slate-700 text-white placeholder:text-gray-500 pr-4 py-6 rounded-xl focus:border-cyan-500"
-                  disabled={isLoading}
+                  disabled={isLoading || aiUnavailable}
                   data-testid="chat-input"
                 />
               </div>
-              <Button 
-                onClick={() => sendMessage()} 
-                disabled={!inputMessage.trim() || isLoading}
+              <Button
+                onClick={() => sendMessage()}
+                disabled={!inputMessage.trim() || isLoading || aiUnavailable}
                 className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 h-auto px-6 rounded-xl"
                 data-testid="chat-send-button"
               >

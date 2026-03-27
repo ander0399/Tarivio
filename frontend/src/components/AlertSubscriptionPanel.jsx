@@ -190,7 +190,7 @@ export default function AlertSubscriptionPanel({ token }) {
               onChange={(e) => setNewHsCode(e.target.value)}
               placeholder="Ej: 1801.00.00"
               className="flex-1 bg-slate-800 border-slate-700 text-white"
-              onKeyPress={(e) => e.key === 'Enter' && addHsCode()}
+              onKeyDown={(e) => e.key === 'Enter' && addHsCode()}
             />
             <Button onClick={addHsCode} className="bg-cyan-500 hover:bg-cyan-600">
               <Plus className="w-4 h-4" />
@@ -226,7 +226,7 @@ export default function AlertSubscriptionPanel({ token }) {
               onChange={(e) => setNewCountry(e.target.value)}
               placeholder="Ej: ES, US, CN"
               className="flex-1 bg-slate-800 border-slate-700 text-white"
-              onKeyPress={(e) => e.key === 'Enter' && addCountry()}
+              onKeyDown={(e) => e.key === 'Enter' && addCountry()}
             />
             <Button onClick={addCountry} className="bg-purple-500 hover:bg-purple-600">
               <Plus className="w-4 h-4" />

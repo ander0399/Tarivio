@@ -137,8 +137,6 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
         throw new Error("Error procesando la imagen");
       }
       
-      console.log("Sending image to API, token exists:", !!token, "base64 length:", base64.length);
-      
       const response = await axios({
         method: 'POST',
         url: `${API}/api/image/analyze`,
@@ -153,8 +151,6 @@ export const ImageClassifier = ({ onProductIdentified, onUseForClassification })
         timeout: 90000,
         validateStatus: (status) => status < 500
       });
-      
-      console.log("Response status:", response.status);
       
       if (response.status === 401) {
         throw new Error("Sesión expirada. Por favor recarga la página e inicia sesión de nuevo.");

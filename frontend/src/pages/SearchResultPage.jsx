@@ -183,7 +183,7 @@ export default function SearchResultPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {result.official_sources.map((source, index) => (
+                    {(result.official_sources || []).map((source, index) => (
                       <a
                         key={index}
                         href={source.url}

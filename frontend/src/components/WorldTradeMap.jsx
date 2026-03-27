@@ -281,7 +281,7 @@ const WorldTradeMap = memo(({ token, onSelectOrigin, onSelectDestination }) => {
         const response = await axios.get(`${API_URL}/api/risk/all-countries`);
         setCountryRisks(response.data);
       } catch (error) {
-        console.log('Risk data not available');
+        // Risk data endpoint not available, map renders without risk overlay
       }
     };
     fetchCountryRisks();

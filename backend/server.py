@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import json
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
@@ -14,7 +15,8 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import base64
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 from documents_database import OFFICIAL_DOCUMENTS, DOCUMENT_CATEGORIES
 from customs_database import WORLDWIDE_CUSTOMS_DATABASE, TRADE_AGREEMENTS_INFO, GLOBAL_RESOURCES, TYPICAL_TARIFFS
 from notifications import (
@@ -44,8 +46,135 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'default-secret-key')
 JWT_ALGORITHM = "HS256"
 
-# LLM Config
+# LLM Config — Emergent proxy key (GPT-5.2)
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+
+# ──────────────────────────────────────────────────────────────────
+# SMART MODEL ROUTER
+# Criteria: use GPT-5.2 for all queries via Emergent proxy
+# ──────────────────────────────────────────────────────────────────
+SONNET_MODEL = "gpt-5.2"
+HAIKU_MODEL  = "gpt-5.2"
+
+# Keywords/patterns that signal a COMPLEX query → use Sonnet
+_COMPLEX_KEYWORDS = [
+    # Classification
+    "clasifica", "classify", "classif", "código taric", "taric code", "hs code",
+    "partida", "subpartida", "heading", "subheading", "nomenclatura",
+    # Trade operations
+    "importar", "exportar", "import", "export", "llevar", "enviar", "mandar",
+    "traer", "mover", "ship", "send", "transport",
+    # Finance & tariffs
+    "arancel", "tariff", "duty", "impuesto", "iva", "vat", "tax", "derechos",
+    "derecho", "tasa", "gravamen", "costo", "cost", "precio",
+    # Trade agreements & regulations
+    "tratado", "agreement", "acuerdo", "tlc", "fta", "mfn", "spg",
+    "regla de origen", "rules of origin", "preferencia",
+    "antidumping", "sanción", "sanction", "embargo", "reach", "cites",
+    "fitosanitario", "phytosanitary", "zoosanitario", "certificado",
+    # Advanced topics
+    "comparativa", "bilateral", "landed cost", "cif", "fob", "incoterm",
+    "estudio de mercado", "market study", "valoración aduanera",
+    "customs valuation", "aduana", "customs", "despacho",
+    # Products / contexts that always imply a trade query
+    "producto", "product", "mercancía", "merchandise", "carga", "cargo",
+]
+
+def select_model(message: str, history_length: int, has_route: bool = False) -> str:
+    """Route to Haiku for simple queries, Sonnet for complex trade/classification ones."""
+    msg_lower = message.lower()
+    # Always Sonnet when message contains known trade/classification terms
+    if any(kw in msg_lower for kw in _COMPLEX_KEYWORDS):
+        return SONNET_MODEL
+    # Always Sonnet once origin+destination are set (mid-conversation analysis)
+    if has_route:
+        return SONNET_MODEL
+    # Sonnet for deep conversations (context coherence matters)
+    if history_length >= 3:
+        return SONNET_MODEL
+    # Long messages imply complexity
+    if len(message) > 200:
+        return SONNET_MODEL
+    # Short greetings, confirmations, simple follow-ups → Haiku
+    return HAIKU_MODEL
+
+
+# ──────────────────────────────────────────────────────────────────
+# RESPONSE CACHE
+# Stores AI answers for identical (message_hash, origin, destination) tuples.
+# TTL: 48h — trade data changes slowly.
+# Only caches NON-clarification responses (full answers).
+# ──────────────────────────────────────────────────────────────────
+import hashlib
+
+CACHE_TTL_HOURS = 168  # 7 días - clasificaciones arancelarias cambian poco
+
+def _cache_key(message: str, origin: str, destination: str, language: str) -> str:
+    """Stable hash for a request. Normalises whitespace and lowercases the message."""
+    normalised = " ".join(message.lower().split())
+    raw = f"{normalised}|{origin or ''}|{destination or ''}|{language}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+async def get_cached_response(cache_key: str) -> Optional[dict]:
+    """Return cached response if still fresh, else None."""
+    doc = await db.ai_response_cache.find_one({"_id": cache_key})
+    if not doc:
+        return None
+    age_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(doc["cached_at"])).total_seconds() / 3600
+    if age_hours > CACHE_TTL_HOURS:
+        await db.ai_response_cache.delete_one({"_id": cache_key})
+        return None
+    return doc["payload"]
+
+async def set_cached_response(cache_key: str, payload: dict) -> None:
+    """Store a response in cache."""
+    await db.ai_response_cache.update_one(
+        {"_id": cache_key},
+        {"$set": {"payload": payload, "cached_at": datetime.now(timezone.utc).isoformat(), "hits": 0}},
+        upsert=True
+    )
+
+async def increment_cache_hit(cache_key: str) -> None:
+    await db.ai_response_cache.update_one({"_id": cache_key}, {"$inc": {"hits": 1}})
+
+
+# ──────────────────────────────────────────────────────────────────
+# USAGE TRACKING — per company/user, per day
+# ──────────────────────────────────────────────────────────────────
+async def track_usage(user_id: str, org_id: str, model: str, input_tokens_est: int, output_tokens_est: int, cache_hit: bool) -> None:
+    """Append a usage record for billing and monitoring."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Approximate cost in USD
+    if "haiku" in model:
+        cost = (input_tokens_est * 0.80 + output_tokens_est * 4.0) / 1_000_000
+    else:
+        cost = (input_tokens_est * 3.0 + output_tokens_est * 15.0) / 1_000_000
+    if cache_hit:
+        cost = 0.0
+
+    await db.usage_stats.update_one(
+        {"org_id": org_id, "date": today},
+        {
+            "$inc": {
+                "messages": 1,
+                "cache_hits": 1 if cache_hit else 0,
+                "input_tokens": 0 if cache_hit else input_tokens_est,
+                "output_tokens": 0 if cache_hit else output_tokens_est,
+                "cost_usd": cost,
+            },
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+        },
+        upsert=True
+    )
+
+async def get_org_usage(org_id: str, days: int = 30) -> list:
+    """Return daily usage records for an organisation."""
+    from_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    cursor = db.usage_stats.find(
+        {"org_id": org_id, "date": {"$gte": from_date}},
+        {"_id": 0}
+    ).sort("date", -1)
+    return await cursor.to_list(days)
 
 app = FastAPI(title="TaricAI - Clasificación Arancelaria Inteligente para Empresas")
 api_router = APIRouter(prefix="/api")
@@ -333,19 +462,17 @@ Si es ambigua, genera preguntas. Si es suficientemente específica, indica que n
         user_message = UserMessage(text=user_prompt)
         response = await chat.send_message(user_message)
         
-        import json
-        import re
         clean_response = response.strip()
-        
+
         if "```json" in clean_response:
             clean_response = clean_response.split("```json")[1].split("```")[0]
         elif "```" in clean_response:
             parts = clean_response.split("```")
             if len(parts) > 1:
                 clean_response = parts[1]
-        
+
         clean_response = clean_response.strip()
-        
+
         try:
             result = json.loads(clean_response)
         except json.JSONDecodeError:
@@ -370,7 +497,7 @@ async def analyze_product_with_ai(
     trade_agreements: Optional[List[str]] = None,
     skip_clarification: bool = False
 ) -> dict:
-    """Use GPT-5.2 to analyze product and suggest TARIC code with compliance checks"""
+    """Use Claude claude-sonnet-4-6 to analyze product and suggest TARIC code with compliance checks"""
     
     agreements_info = ""
     if trade_agreements and len(trade_agreements) > 0:
@@ -466,10 +593,8 @@ Producto a clasificar: {product_description}"""
         user_message = UserMessage(text=user_prompt)
         response = await chat.send_message(user_message)
         
-        import json
-        import re
         clean_response = response.strip()
-        
+
         # Remove markdown code blocks
         if "```json" in clean_response:
             clean_response = clean_response.split("```json")[1].split("```")[0]
@@ -477,9 +602,9 @@ Producto a clasificar: {product_description}"""
             parts = clean_response.split("```")
             if len(parts) > 1:
                 clean_response = parts[1]
-        
+
         clean_response = clean_response.strip()
-        
+
         try:
             result = json.loads(clean_response)
         except json.JSONDecodeError:
@@ -494,16 +619,19 @@ Producto a clasificar: {product_description}"""
         
     except Exception as e:
         logger.error(f"AI Analysis error: {e}")
+        error_str = str(e)
+        if "Budget" in error_str and "exceeded" in error_str:
+            raise HTTPException(status_code=503, detail="BUDGET_EXCEEDED")
         return {
             "taric_code": "0000000000",
-            "description": f"Error en análisis: {str(e)}",
+            "description": "El servicio de IA no está disponible en este momento. Por favor, inténtalo de nuevo más tarde.",
             "chapter": "00",
             "heading": "00",
             "subheading": "00",
             "confidence": "baja",
             "needs_clarification": False,
             "clarification_questions": [],
-            "tariffs": [{"duty_type": "No disponible", "rate": "N/A", "description": "Error en consulta", "legal_base": None}],
+            "tariffs": [{"duty_type": "No disponible", "rate": "N/A", "description": "Servicio temporalmente no disponible", "legal_base": None}],
             "preferential_duties": None,
             "trade_agreement_applied": None,
             "documents": [],
@@ -1132,10 +1260,6 @@ async def analyze_image(request: ImageAnalysisRequest, current_user: dict = Depe
     """Analyze product image using AI vision to identify and describe it"""
     
     try:
-        from emergentintegrations.llm.chat import ImageContent
-        import base64
-        import re
-        
         # Get language name for the prompt
         lang_code = request.language or "es"
         lang_name = LANGUAGE_NAMES.get(lang_code, "español")
@@ -1225,7 +1349,6 @@ Always respond in valid JSON format:
         logger.info(f"Image analysis response preview: {response[:300]}...")
         
         # Parse response
-        import json
         clean_response = response.strip()
         
         # Remove markdown code blocks if present
@@ -1250,7 +1373,7 @@ Always respond in valid JSON format:
             if json_match:
                 try:
                     result = json.loads(json_match.group())
-                except:
+                except Exception:
                     # If all parsing fails, create a result from the raw response
                     result = {
                         "product_description": clean_response[:500] if clean_response else "Producto identificado en la imagen",
@@ -1462,8 +1585,6 @@ El estudio debe ser de calidad consultoría profesional. Idioma: {lang_name}."""
         logger.info(f"Market study response received, length: {len(response)}")
         
         # Parse response with robust error handling
-        import json
-        import re
         clean_response = response.strip()
         
         # Remove markdown code blocks
@@ -1680,107 +1801,129 @@ def build_country_context(origin_code: str, destination_code: str, language: str
     
     return context
 
-def detect_missing_info_for_clarification(message: str, context: dict) -> Optional[dict]:
-    """Detecta si falta información crítica y genera preguntas de clarificación con opciones"""
-    clarification = None
-    
-    message_lower = message.lower()
-    
-    # Palabras clave que indican consulta de importación/exportación
-    trade_keywords = ["importar", "exportar", "arancel", "aduana", "clasificar", "enviar", 
-                      "traer", "llevar", "comercio", "producto", "mercancía", "import", 
-                      "export", "tariff", "customs", "classify"]
-    
-    is_trade_query = any(kw in message_lower for kw in trade_keywords)
-    
-    if is_trade_query:
-        # Verificar si falta país de origen
-        if not context.get("origin_country"):
-            clarification = {
-                "question": "Para darte información precisa, necesito saber el país de origen. ¿De dónde sale la mercancía?",
-                "options": [
-                    {"id": "1", "label": "China", "value": "CN"},
-                    {"id": "2", "label": "Estados Unidos", "value": "US"},
-                    {"id": "3", "label": "Alemania", "value": "DE"},
-                    {"id": "4", "label": "México", "value": "MX"},
-                    {"id": "5", "label": "Colombia", "value": "CO"},
-                    {"id": "6", "label": "España", "value": "ES"},
-                    {"id": "7", "label": "Brasil", "value": "BR"},
-                    {"id": "8", "label": "Italia", "value": "IT"},
-                ],
-                "allow_custom": True,
-                "custom_placeholder": "Otro país (escríbelo aquí)...",
-                "info_type": "origin_country"
-            }
-            return clarification
-        
-        # Verificar si falta país de destino
-        if not context.get("destination_country"):
-            clarification = {
-                "question": "¿A qué país deseas enviar o importar la mercancía?",
-                "options": [
-                    {"id": "1", "label": "España", "value": "ES"},
-                    {"id": "2", "label": "Estados Unidos", "value": "US"},
-                    {"id": "3", "label": "Colombia", "value": "CO"},
-                    {"id": "4", "label": "México", "value": "MX"},
-                    {"id": "5", "label": "Chile", "value": "CL"},
-                    {"id": "6", "label": "Argentina", "value": "AR"},
-                    {"id": "7", "label": "Perú", "value": "PE"},
-                    {"id": "8", "label": "Alemania", "value": "DE"},
-                ],
-                "allow_custom": True,
-                "custom_placeholder": "Otro país (escríbelo aquí)...",
-                "info_type": "destination_country"
-            }
-            return clarification
-        
-        # Detectar si es una consulta de producto y no tenemos suficiente detalle
-        product_keywords = ["producto", "mercancía", "artículo", "bien", "item", "product", "goods"]
-        generic_terms = ["algo", "cosa", "esto", "eso", "producto", "mercancía"]
-        
-        if any(kw in message_lower for kw in product_keywords):
-            # Verificar si la descripción es muy genérica
-            words = message_lower.split()
-            if len(words) < 5 or any(term in message_lower for term in generic_terms):
-                clarification = {
-                    "question": "Para clasificar correctamente, necesito más detalles sobre el producto. ¿Qué tipo de producto es?",
-                    "options": [
-                        {"id": "1", "label": "Alimentos y bebidas", "value": "food_beverages"},
-                        {"id": "2", "label": "Textiles y ropa", "value": "textiles_clothing"},
-                        {"id": "3", "label": "Electrónicos y tecnología", "value": "electronics"},
-                        {"id": "4", "label": "Maquinaria y equipos", "value": "machinery"},
-                        {"id": "5", "label": "Productos químicos", "value": "chemicals"},
-                        {"id": "6", "label": "Materias primas", "value": "raw_materials"},
-                        {"id": "7", "label": "Vehículos y partes", "value": "vehicles"},
-                        {"id": "8", "label": "Productos farmacéuticos", "value": "pharmaceuticals"},
-                    ],
-                    "allow_custom": True,
-                    "custom_placeholder": "Describe tu producto con más detalle...",
-                    "info_type": "product_type"
-                }
-                return clarification
-    
-    # Detectar consultas sobre requisitos específicos sin producto definido
-    requirement_keywords = ["requisito", "documento", "permiso", "certificado", "licencia", 
-                          "requirement", "document", "permit", "certificate", "license"]
-    
-    if any(kw in message_lower for kw in requirement_keywords) and not context.get("product_description"):
-        clarification = {
-            "question": "Los requisitos varían según el tipo de producto. ¿Qué categoría de producto te interesa?",
-            "options": [
-                {"id": "1", "label": "Productos agrícolas", "value": "agricultural"},
-                {"id": "2", "label": "Productos de origen animal", "value": "animal_origin"},
-                {"id": "3", "label": "Productos procesados", "value": "processed"},
-                {"id": "4", "label": "Productos industriales", "value": "industrial"},
-                {"id": "5", "label": "Productos peligrosos/regulados", "value": "regulated"},
-                {"id": "6", "label": "Productos de consumo general", "value": "consumer_goods"},
-            ],
-            "allow_custom": True,
-            "custom_placeholder": "Especifica el producto...",
-            "info_type": "product_category"
+# Mapa de nombres de país a código ISO para detección automática en texto
+COUNTRY_NAME_TO_CODE = {
+    # Español
+    "china": "CN", "japón": "JP", "japon": "JP", "corea del sur": "KR", "corea": "KR",
+    "india": "IN", "tailandia": "TH", "vietnam": "VN", "indonesia": "ID", "malasia": "MY",
+    "filipinas": "PH", "singapur": "SG", "taiwan": "TW", "hong kong": "HK",
+    "estados unidos": "US", "eeuu": "US", "usa": "US",
+    "canadá": "CA", "canada": "CA", "méxico": "MX", "mexico": "MX",
+    "brasil": "BR", "brazil": "BR", "argentina": "AR", "chile": "CL", "perú": "PE", "peru": "PE",
+    "colombia": "CO", "ecuador": "EC", "venezuela": "VE", "bolivia": "BO",
+    "uruguay": "UY", "paraguay": "PY",
+    "españa": "ES", "espana": "ES", "alemania": "DE", "francia": "FR", "italia": "IT",
+    "reino unido": "GB", "uk": "GB", "países bajos": "NL", "paises bajos": "NL", "holanda": "NL",
+    "bélgica": "BE", "belgica": "BE", "portugal": "PT", "suecia": "SE", "noruega": "NO",
+    "suiza": "CH", "austria": "AT", "polonia": "PL", "turquía": "TR", "turquia": "TR",
+    "rusia": "RU", "ucrania": "UA",
+    "emiratos árabes": "AE", "emiratos arabes": "AE", "uae": "AE", "dubái": "AE", "dubai": "AE",
+    "arabia saudita": "SA", "arabia saudí": "SA", "qatar": "QA", "kuwait": "KW",
+    "israel": "IL", "irán": "IR", "iran": "IR", "irak": "IQ",
+    "marruecos": "MA", "argelia": "DZ", "túnez": "TN", "tunez": "TN", "egipto": "EG",
+    "nigeria": "NG", "sudáfrica": "ZA", "sudafrica": "ZA", "kenia": "KE", "ghana": "GH",
+    "bangladesh": "BD", "pakistán": "PK", "pakistan": "PK", "sri lanka": "LK",
+    "australia": "AU", "nueva zelanda": "NZ",
+    # English
+    "china": "CN", "japan": "JP", "south korea": "KR", "thailand": "TH",
+    "united states": "US", "united kingdom": "GB", "germany": "DE", "france": "FR",
+    "italy": "IT", "spain": "ES", "netherlands": "NL", "belgium": "BE",
+    "switzerland": "CH", "austria": "AT", "poland": "PL", "turkey": "TR",
+    "russia": "RU", "ukraine": "UA", "morocco": "MA", "egypt": "EG",
+    "south africa": "ZA", "kenya": "KE", "nigeria": "NG",
+    "australia": "AU", "new zealand": "NZ", "brazil": "BR", "colombia": "CO",
+    "mexico": "MX", "argentina": "AR", "chile": "CL", "peru": "PE",
+}
+
+
+def extract_countries_from_text(message: str) -> dict:
+    """Extrae códigos de país origen/destino mencionados en el texto del mensaje"""
+    msg_lower = message.lower().rstrip('.,!?')
+    found = {}
+    sorted_countries = sorted(COUNTRY_NAME_TO_CODE.keys(), key=len, reverse=True)
+
+    # Buscar origen: texto entre "de/desde" y la siguiente preposición destino
+    origin_match = re.search(
+        r'(?:de|desde)\s+(.+?)\s+(?:\ba\b|hacia\b|para\b|al\b)',
+        msg_lower
+    )
+    # Buscar destino: texto después de "a/para/hacia/al" hasta el final
+    dest_match = re.search(
+        r'(?:\ba\b|hacia\b|para\b|al\b)\s+(.+)$',
+        msg_lower
+    )
+
+    if origin_match:
+        origin_text = origin_match.group(1).strip()
+        for country in sorted_countries:
+            if country in origin_text:
+                found["origin_country"] = COUNTRY_NAME_TO_CODE[country]
+                break
+
+    if dest_match:
+        dest_text = dest_match.group(1).strip()
+        for country in sorted_countries:
+            if country in dest_text:
+                found["destination_country"] = COUNTRY_NAME_TO_CODE[country]
+                break
+
+    # Fallback: buscar en inglés "from X to Y"
+    if not found:
+        en_match = re.search(r'from\s+(.+?)\s+to\s+(.+)$', msg_lower)
+        if en_match:
+            for country in sorted_countries:
+                if country in en_match.group(1) and "origin_country" not in found:
+                    found["origin_country"] = COUNTRY_NAME_TO_CODE[country]
+                if country in en_match.group(2) and "destination_country" not in found:
+                    found["destination_country"] = COUNTRY_NAME_TO_CODE[country]
+
+    return found
+
+
+def parse_claude_question(response_text: str) -> Optional[dict]:
+    """
+    Detecta si Claude generó una pregunta interactiva con opciones en su respuesta.
+    Busca el bloque <<PREGUNTA_OPCIONES>>...</<<PREGUNTA_OPCIONES>> y extrae el JSON.
+    Retorna dict con 'text_before', 'question', 'info_type', 'options', 'allow_custom', 'custom_placeholder'
+    o None si no hay pregunta estructurada.
+    """
+    pattern = r'<<PREGUNTA_OPCIONES>>\s*([\s\S]*?)\s*<<\/PREGUNTA_OPCIONES>>'
+    match = re.search(pattern, response_text)
+    if not match:
+        return None
+
+    try:
+        raw_json = match.group(1).strip()
+        # Limpiar backticks de markdown (```json ... ```) si los hay
+        raw_json = re.sub(r'^```(?:json)?\s*', '', raw_json)
+        raw_json = re.sub(r'\s*```$', '', raw_json).strip()
+
+        data = json.loads(raw_json)
+
+        # Validar que tiene la estructura mínima
+        if not data.get("question") or not data.get("options"):
+            return None
+
+        # Texto antes del bloque (explicación de Claude antes de la pregunta)
+        text_before = response_text[:match.start()].strip()
+
+        return {
+            "text_before": text_before,
+            "question": data.get("question", ""),
+            "info_type": data.get("info_type", "product_detail"),
+            "options": data.get("options", []),
+            "allow_custom": data.get("allow_custom", True),
+            "custom_placeholder": data.get("custom_placeholder", "Escribe tu respuesta...")
         }
-        return clarification
-    
+    except (json.JSONDecodeError, KeyError, TypeError):
+        logger.warning(f"parse_claude_question: JSON inválido en bloque PREGUNTA_OPCIONES")
+        return None
+
+
+def detect_missing_info_for_clarification(message: str, context: dict, has_prior_messages: bool = False) -> Optional[dict]:
+    """
+    DESHABILITADA — Claude maneja todas las preguntas directamente usando <<PREGUNTA_OPCIONES>>.
+    """
     return None
 
 @api_router.post("/chat/message")
@@ -1808,6 +1951,14 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
             chat_history["context"]["destination_country"] = request.destination_country
         if request.product_description:
             chat_history["context"]["product_description"] = request.product_description
+
+        # Auto-extraer países del texto libre si aún no están en el contexto
+        if not chat_history["context"].get("origin_country") or not chat_history["context"].get("destination_country"):
+            extracted = extract_countries_from_text(request.message)
+            if extracted.get("origin_country") and not chat_history["context"].get("origin_country"):
+                chat_history["context"]["origin_country"] = extracted["origin_country"]
+            if extracted.get("destination_country") and not chat_history["context"].get("destination_country"):
+                chat_history["context"]["destination_country"] = extracted["destination_country"]
         
         # Manejar respuesta de clarificación si viene de una opción seleccionada
         if request.selected_option and chat_history.get("pending_clarification"):
@@ -1815,10 +1966,16 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
             info_type = pending.get("info_type")
             
             # Actualizar contexto según el tipo de información
+            # Normalizar a código ISO si el usuario escribió el nombre del país (opción personalizada)
+            def normalize_country(value: str) -> str:
+                if len(value) == 2 and value.upper() == value:
+                    return value  # Ya es código ISO
+                return COUNTRY_NAME_TO_CODE.get(value.lower().strip(), value)
+
             if info_type == "origin_country":
-                chat_history["context"]["origin_country"] = request.selected_option
+                chat_history["context"]["origin_country"] = normalize_country(request.selected_option)
             elif info_type == "destination_country":
-                chat_history["context"]["destination_country"] = request.selected_option
+                chat_history["context"]["destination_country"] = normalize_country(request.selected_option)
             elif info_type in ["product_type", "product_category"]:
                 # Combinar con descripción existente o crear nueva
                 existing = chat_history["context"].get("product_description", "")
@@ -1827,7 +1984,8 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
             chat_history["pending_clarification"] = None
         
         # Detectar si necesitamos clarificación
-        clarification_needed = detect_missing_info_for_clarification(request.message, chat_history["context"])
+        has_prior_messages = len(chat_history.get("messages", [])) > 0
+        clarification_needed = detect_missing_info_for_clarification(request.message, chat_history["context"], has_prior_messages)
         
         if clarification_needed and not request.selected_option:
             # Guardar mensaje del usuario
@@ -1855,7 +2013,7 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
             )
             
             return {
-                "response": clarification_needed["question"],
+                "response": "",
                 "session_id": session_id,
                 "sources": [],
                 "suggested_questions": [],
@@ -1876,28 +2034,83 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
         if origin and destination:
             country_context = build_country_context(origin, destination, request.language)
         
-        # Obtener historial de mensajes para contexto
-        chat_history_text = chr(10).join([f"{m['role']}: {m['content']}" for m in chat_history.get('messages', [])[-5:]])
-        
         # Usar el nuevo prompt del Asistente IA Pro
         system_prompt = get_assistant_system_prompt(
             language=request.language,
             country_context=country_context,
-            chat_history_text=chat_history_text
+            chat_history_text=""
         )
-        
-        # Llamar a la IA
+
+        # Construir historial de mensajes para LlmChat (últimos 20, excluyendo clarificaciones)
+        # initial_messages reemplaza el system message, así que debemos incluirlo primero
+        history_messages = [
+            m for m in chat_history.get("messages", [])
+            if not m.get("is_clarification")
+        ][-20:]
+
+        initial_messages = [{"role": "system", "content": system_prompt}]
+        for m in history_messages:
+            role = "user" if m["role"] == "user" else "assistant"
+            # LlmChat usa formato de lista para contenido de usuario
+            if role == "user":
+                initial_messages.append({"role": "user", "content": [{"type": "text", "text": m["content"]}]})
+            else:
+                initial_messages.append({"role": "assistant", "content": m["content"]})
+
+        user_message_text = request.message
+
+        # ── RESPONSE CACHE CHECK ──────────────────────────────────
+        # Only cache full answers (not clarification responses), and only
+        # when there is no pending_clarification (i.e., fresh classification queries).
+        cache_key = _cache_key(user_message_text, origin or "", destination or "", request.language)
+        cached = None
+        if not chat_history.get("pending_clarification") and not request.selected_option:
+            cached = await get_cached_response(cache_key)
+
+        if cached:
+            # Return cached payload and skip the LLM call
+            await increment_cache_hit(cache_key)
+            await track_usage(user["id"], user.get("organization_id", user["id"]), "cache", 0, 0, cache_hit=True)
+            # Still save the user message in session history
+            chat_history["messages"].append({
+                "role": "user",
+                "content": request.message,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            chat_history["messages"].append({
+                "role": "assistant",
+                "content": cached.get("response", ""),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "sources": cached.get("sources", []),
+                "is_clarification": cached.get("needs_clarification", False),
+                "from_cache": True
+            })
+            chat_history["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.chat_sessions.update_one(
+                {"session_id": session_id}, {"$set": chat_history}, upsert=True
+            )
+            return {**cached, "session_id": session_id, "from_cache": True}
+
+        # ── SMART MODEL ROUTER ────────────────────────────────────
+        selected_model = select_model(user_message_text, len(history_messages), has_route=bool(origin and destination))
+        logger.info(f"Model selected: {selected_model} for message len={len(user_message_text)}")
+
+        # ── LLM CALL ─────────────────────────────────────────────
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"chat-{session_id}",
-            system_message=system_prompt
+            system_message=system_prompt,
+            initial_messages=initial_messages
         ).with_model("openai", "gpt-5.2")
-        
-        ai_response = await chat.send_message(UserMessage(text=request.message))
-        
+
+        ai_response = await chat.send_message(UserMessage(text=user_message_text))
+
         # La respuesta es un string directamente
         response_text = ai_response if isinstance(ai_response, str) else str(ai_response)
-        
+
+        # Detectar si Claude generó una pregunta interactiva con opciones
+        claude_question = parse_claude_question(response_text)
+
         # Extraer fuentes de la respuesta
         sources = []
         origin_info = get_country_info(origin) if origin else None
@@ -1947,33 +2160,84 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
                 "¿Hay restricciones o prohibiciones para este producto?"
             ]
         
+        # Determinar texto visible (sin el bloque de opciones si Claude generó pregunta)
+        display_text = claude_question["text_before"] if claude_question else response_text
+
         # Guardar mensaje del usuario
         chat_history["messages"].append({
             "role": "user",
             "content": request.message,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
-        
-        # Guardar respuesta del asistente
+
+        # Guardar respuesta del asistente (solo el texto visible)
         chat_history["messages"].append({
             "role": "assistant",
-            "content": response_text,
+            "content": display_text,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "sources": sources
+            "sources": sources,
+            "is_clarification": bool(claude_question)
         })
-        
+
         chat_history["updated_at"] = datetime.now(timezone.utc).isoformat()
-        chat_history["pending_clarification"] = None
-        
+
+        # Si Claude generó una pregunta, guardar su pending_clarification con info_type
+        # Esto permite actualizar el contexto (origin_country, destination_country) cuando el usuario responda
+        if claude_question:
+            chat_history["pending_clarification"] = {
+                "info_type": claude_question.get("info_type", "product_detail"),
+                "question": claude_question["question"],
+                "options": claude_question["options"]
+            }
+        else:
+            chat_history["pending_clarification"] = None
+
         # Actualizar en base de datos
         await db.chat_sessions.update_one(
             {"session_id": session_id},
             {"$set": chat_history},
             upsert=True
         )
-        
+
+        # ── USAGE TRACKING ───────────────────────────────────────
+        input_est  = len(system_prompt) // 4 + sum(len(m.get("content","")) // 4 for m in history_messages) + len(user_message_text) // 4
+        output_est = len(response_text) // 4
+        await track_usage(
+            user["id"], user.get("organization_id", user["id"]),
+            selected_model, input_est, output_est, cache_hit=False
+        )
+
+        # ── CACHE STORE (only full answers without clarification) ─
+        if not claude_question and display_text:
+            final_payload = {
+                "response": display_text,
+                "sources": sources,
+                "suggested_questions": suggested_questions,
+                "context": chat_history["context"],
+                "needs_clarification": False,
+                "clarification_request": None
+            }
+            await set_cached_response(cache_key, final_payload)
+
+        # Si Claude hizo una pregunta con opciones, devolver como clarification_request
+        if claude_question:
+            return {
+                "response": display_text,
+                "session_id": session_id,
+                "sources": sources,
+                "suggested_questions": [],
+                "context": chat_history["context"],
+                "needs_clarification": True,
+                "clarification_request": {
+                    "question": claude_question["question"],
+                    "options": claude_question["options"],
+                    "allow_custom": claude_question["allow_custom"],
+                    "custom_placeholder": claude_question["custom_placeholder"]
+                }
+            }
+
         return {
-            "response": response_text,
+            "response": display_text,
             "session_id": session_id,
             "sources": sources,
             "suggested_questions": suggested_questions,
@@ -1983,8 +2247,16 @@ async def chat_message(request: ChatRequest, user: dict = Depends(get_current_us
         }
         
     except Exception as e:
-        logger.error(f"Error en chat: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error procesando mensaje: {str(e)}")
+        error_str = str(e)
+        logger.error(f"Error en chat: {error_str}")
+        # Provide user-friendly error messages
+        if "Budget" in error_str and "exceeded" in error_str:
+            raise HTTPException(status_code=503, detail="BUDGET_EXCEEDED")
+        if "rate_limit" in error_str.lower() or "rate limit" in error_str.lower():
+            raise HTTPException(status_code=429, detail="Demasiadas solicitudes. Por favor, espera unos segundos e intenta de nuevo.")
+        if "timeout" in error_str.lower() or "timed out" in error_str.lower():
+            raise HTTPException(status_code=504, detail="La consulta tardó demasiado. Intenta con una pregunta más corta.")
+        raise HTTPException(status_code=500, detail="Error procesando tu mensaje. Por favor, inténtalo de nuevo.")
 
 @api_router.get("/chat/sessions")
 async def get_chat_sessions(user: dict = Depends(get_current_user)):
@@ -2168,9 +2440,6 @@ Proporciona el JSON con todos los cálculos."""
         response_text = ai_response if isinstance(ai_response, str) else str(ai_response)
         
         # Intentar parsear el JSON de la respuesta
-        import json
-        import re
-        
         # Extraer JSON de la respuesta
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if json_match:
@@ -2859,6 +3128,24 @@ def get_risk_recommendation(level: int) -> str:
         7: "PROHIBIDO: País bajo sanciones. Operación no permitida."
     }
     return recommendations.get(level, "Sin recomendación disponible")
+
+@api_router.get("/chat/usage")
+async def get_chat_usage(days: int = 30, user: dict = Depends(get_current_user)):
+    """Devuelve el consumo de IA (mensajes, tokens, costo estimado, cache hits) de la organización."""
+    org_id = user.get("organization_id", user["id"])
+    records = await get_org_usage(org_id, days)
+    totals = {"messages": 0, "cache_hits": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    for r in records:
+        for k in totals:
+            totals[k] += r.get(k, 0)
+    cache_rate = round(totals["cache_hits"] / totals["messages"] * 100, 1) if totals["messages"] else 0
+    return {
+        "period_days": days,
+        "daily": records,
+        "totals": totals,
+        "cache_hit_rate_pct": cache_rate,
+        "avg_cost_per_message_usd": round(totals["cost_usd"] / max(totals["messages"] - totals["cache_hits"], 1), 5)
+    }
 
 # Include router and middleware
 app.include_router(api_router)

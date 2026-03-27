@@ -253,8 +253,20 @@ export default function DashboardPage() {
       fetchStats();
       toast.success(t("messages.searchSuccess"));
     } catch (error) {
-      const message = error.response?.data?.detail || t("messages.searchError");
-      toast.error(message);
+      const detail = error.response?.data?.detail;
+      const status = error.response?.status;
+      if (detail === 'BUDGET_EXCEEDED' || status === 503) {
+        if (!localStorage.getItem('taricai_budget_exceeded_at')) {
+          localStorage.setItem('taricai_budget_exceeded_at', Date.now().toString());
+        }
+        const exceededAt = parseInt(localStorage.getItem('taricai_budget_exceeded_at'));
+        const availableAt = new Date(exceededAt + 3600 * 1000);
+        const hh = String(availableAt.getHours()).padStart(2, '0');
+        const mm = String(availableAt.getMinutes()).padStart(2, '0');
+        toast.error(`Servicio de IA temporalmente no disponible. Vuelve a las ${hh}:${mm}.`, { duration: 8000 });
+      } else {
+        toast.error(detail || t("messages.searchError"));
+      }
     } finally {
       setSearching(false);
     }
@@ -827,7 +839,7 @@ export default function DashboardPage() {
                         {t("results.sources")}
                       </h3>
                       <div className="space-y-3">
-                        {searchResult.official_sources.map((source, index) => (
+                        {(searchResult.official_sources || []).map((source, index) => (
                           <a
                             key={index}
                             href={source.url}
