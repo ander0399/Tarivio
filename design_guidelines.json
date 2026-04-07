@@ -1,0 +1,165 @@
+{
+  "identity": {
+    "persona": "E1 - The Anti-AI Designer",
+    "mission": "Create a TARIC SaaS that feels like a modern logistics command center, not a government form.",
+    "core_principles": [
+      "Data Density with Breathing Room: High information density (tables) but surrounded by 'white' space.",
+      "The 'Container' Aesthetic: Use rigid, boxy layouts (Bento) inspired by shipping containers.",
+      "Tactile Utility: Buttons and inputs should feel 'heavy' and clickable.",
+      "Trust through Precision: No vague gradients. Sharp lines, clear types."
+    ]
+  },
+  "design_system": {
+    "theme_strategy": "Professional Maritime",
+    "colors": {
+      "palette_name": "Deep Harbor",
+      "mode": "light",
+      "primary": {
+        "name": "Maritime Navy",
+        "value": "#0F172A",
+        "tailwind": "slate-900",
+        "usage": "Headings, Primary Buttons, Sidebar"
+      },
+      "secondary": {
+        "name": "International Trade Blue",
+        "value": "#2563EB",
+        "tailwind": "blue-600",
+        "usage": "Links, Active States, Highlights"
+      },
+      "accent": {
+        "name": "Customs Amber",
+        "value": "#D97706",
+        "tailwind": "amber-600",
+        "usage": "Warnings, Required Documents, 'Attention' items"
+      },
+      "background": {
+        "page": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "subtle": "#F1F5F9"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#64748B",
+        "tertiary": "#94A3B8"
+      }
+    },
+    "typography": {
+      "headings": {
+        "family": "Plus Jakarta Sans",
+        "weights": ["600", "700", "800"],
+        "tracking": "tight",
+        "usage": "Main headers, Section titles. Give it a 'Tech-Forward' feel."
+      },
+      "body": {
+        "family": "IBM Plex Sans",
+        "weights": ["400", "500"],
+        "usage": "General text, descriptions. Chosen for its legibility and 'humanist' tech vibe."
+      },
+      "mono": {
+        "family": "JetBrains Mono",
+        "usage": "CRITICAL: ALL TARIC CODES, HS CODES, AND NUMERICAL DATA MUST USE THIS FONT."
+      }
+    },
+    "spacing": {
+      "scale": "Generous",
+      "container_padding": "p-8 md:p-12",
+      "element_gap": "gap-6"
+    },
+    "shapes": {
+      "radius": "rounded-sm",
+      "border_width": "border",
+      "style": "Industrial precision. Avoid pill-shapes for main containers. Use pill-shapes ONLY for status badges."
+    }
+  },
+  "components": {
+    "shadcn_customization": {
+      "general": "Strip the default 'soft' look. Go for a crisper, more 'data-tool' aesthetic.",
+      "buttons": "h-11 rounded-sm font-medium tracking-wide. Primary: bg-slate-900 hover:bg-slate-800. Secondary: border-slate-200 hover:bg-slate-50.",
+      "inputs": "h-12 rounded-sm border-slate-300 focus:ring-blue-600 bg-white shadow-sm. Typography: text-base.",
+      "cards": "rounded-sm border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]. No massive drop shadows.",
+      "tables": "Density: Compact. Header: bg-slate-50 uppercase text-xs font-bold text-slate-500 tracking-wider. Rows: hover:bg-blue-50/50 cursor-pointer transition-colors."
+    },
+    "custom_components": [
+      {
+        "name": "TaricCodeDisplay",
+        "description": "A component to display the 10-digit TARIC code broken down by pairs (Chapter, Heading, Subheading). Use distinct boxes for each pair."
+      },
+      {
+        "name": "DutyCalculatorCard",
+        "description": "A card that visually sums up duties. Use a 'receipt' style layout."
+      },
+      {
+        "name": "DocumentChecklist",
+        "description": "List of required docs. Use icons (Fit/Non-Fito). Green checkmarks for 'Have', Red/Amber for 'Need'."
+      }
+    ]
+  },
+  "layout_strategies": {
+    "landing_page": {
+      "hero": {
+        "style": "Split Screen or Center Focus with High-Quality Background Image (Overlay).",
+        "image": "https://images.unsplash.com/photo-1769144256227-5185141c3aca",
+        "overlay": "bg-slate-900/80",
+        "headline": "text-white text-5xl md:text-7xl font-bold tracking-tighter."
+      },
+      "features": {
+        "style": "Bento Grid (Mode A). Mix text blocks with large statistical numbers or icons."
+      }
+    },
+    "dashboard": {
+      "structure": "Sidebar Navigation (Left) + Top Header (Search) + Main Content Area.",
+      "grid": "Mode B (High Density). Use full height widgets.",
+      "background": "bg-slate-50. Surface items are white."
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Use sparingly. Only for sticky headers or floating action bars. backdrop-blur-md bg-white/80 border-b border-slate-200/50.",
+    "gradients": "NO GRADIENTS on backgrounds. Use subtle gradients ONLY on 'Premium/Pro' feature badges or specific 'AI Analysis' buttons (e.g., bg-gradient-to-r from-blue-600 to-indigo-600).",
+    "motion": "Use `framer-motion`. Page transitions: subtle fade-up. List items: staggered entrance. Hover: slight lift (-2px) for cards."
+  },
+  "assets": {
+    "images": [
+      {
+        "category": "Hero Background",
+        "url": "https://images.unsplash.com/photo-1769144256227-5185141c3aca",
+        "description": "Aerial view of stacked shipping containers. Use with heavy dark overlay."
+      },
+      {
+        "category": "Feature: Logistics",
+        "url": "https://images.unsplash.com/photo-1768796373360-95d80c5830fb",
+        "description": "Warehouse interior with workers. Use for 'Documentation/Logistics' section."
+      },
+      {
+        "category": "Feature: Global Trade",
+        "url": "https://images.unsplash.com/photo-1673902219551-6e6de00d2e13",
+        "description": "Cargo ship in ocean. Use for 'International Tariffs' section."
+      }
+    ],
+    "icons": "Use `lucide-react`. Keywords: Container, Ship, FileCheck, ShieldAlert, Search, Globe, Calculator."
+  },
+  "instructions_to_main_agent": [
+    "1. START by installing required fonts: `yarn add @fontsource/plus-jakarta-sans @fontsource/ibm-plex-sans @fontsource/jetbrains-mono`.",
+    "2. CONFIGURE Tailwind to use these fonts. `sans` -> Plus Jakarta, `body` -> IBM Plex, `mono` -> JetBrains.",
+    "3. IMPLEMENT the 'Bento' grid for the dashboard overview. Don't just stack cards.",
+    "4. ENSURE the Search Experience is 'Google-like' but for products. Big central search on home, persistent search on dashboard.",
+    "5. USE Shadcn `Table` component for the tariff results, but customize the styling to match the 'Industrial Precision' look (borders, compact padding).",
+    "6. ADD `data-testid` to all interactive elements."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "- Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "- Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "- Create depth through layered design elements with z-index hierarchy",
+    "- Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "- You MUST NOT apply universal transition. Eg: `transition: all`. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "- You MUST NOT center align the app container, ie do not add `.App { text-align: center; }` in the css file. This disrupts the human natural reading flow of text",
+    "- Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "- NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚 for icons.",
+    "- Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "- Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "- Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "- Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "- Components MUST use named exports (export const ComponentName = ...)",
+    "- Pages MUST use default exports (export default function PageName() {...})",
+    "- Use `sonner` for toasts"
+  ]
+}

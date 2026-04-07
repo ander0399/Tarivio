@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaricAI - Pitch Deck Inversores</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            line-height: 1.6;
+        }
+        
+        .slide {
+            width: 100%;
+            min-height: 100vh;
+            padding: 60px 80px;
+            display: flex;
+            flex-direction: column;
+            page-break-after: always;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(0,212,255,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        .slide-number {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 14px;
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #00d4ff;
+            margin-bottom: 40px;
+            letter-spacing: -1px;
+        }
+        
+        .logo span {
+            color: #ffffff;
+        }
+        
+        h1 {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.1;
+        }
+        
+        h2 {
+            font-size: 42px;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #ffffff;
+        }
+        
+        h3 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #00d4ff;
+        }
+        
+        .subtitle {
+            font-size: 24px;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(0,212,255,0.15) 0%, rgba(0,255,136,0.1) 100%);
+            border: 1px solid rgba(0,212,255,0.3);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 30px;
+            margin: 40px 0;
+        }
+        
+        .stat-box {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 48px;
+            font-weight: 800;
+            color: #00d4ff;
+            display: block;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #a0a0a0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            margin-top: 40px;
+        }
+        
+        .three-column {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            margin-top: 40px;
+        }
+        
+        .feature-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 30px;
+        }
+        
+        .feature-card h4 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #00d4ff;
+        }
+        
+        .feature-card p {
+            color: #a0a0a0;
+            font-size: 16px;
+        }
+        
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        ul li {
+            padding: 12px 0;
+            padding-left: 30px;
+            position: relative;
+            font-size: 18px;
+            color: #d0d0d0;
+        }
+        
+        ul li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .table-container {
+            margin: 30px 0;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 16px;
+        }
+        
+        th {
+            background: rgba(0,212,255,0.2);
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #00d4ff;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        td {
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: #d0d0d0;
+        }
+        
+        tr:nth-child(even) {
+            background: rgba(255,255,255,0.02);
+        }
+        
+        .cta-box {
+            background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .cta-box h3 {
+            color: #0a0a0a;
+            font-size: 32px;
+            margin-bottom: 15px;
+        }
+        
+        .cta-box p {
+            color: #0a0a0a;
+            font-size: 20px;
+            opacity: 0.8;
+        }
+        
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            margin: 40px 0;
+            position: relative;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 30px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+        }
+        
+        .timeline-item {
+            text-align: center;
+            position: relative;
+            flex: 1;
+        }
+        
+        .timeline-dot {
+            width: 20px;
+            height: 20px;
+            background: #00d4ff;
+            border-radius: 50%;
+            margin: 20px auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .timeline-label {
+            font-size: 14px;
+            color: #00d4ff;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .timeline-content {
+            font-size: 14px;
+            color: #a0a0a0;
+            padding: 0 10px;
+        }
+        
+        .comparison-row {
+            display: flex;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .comparison-label {
+            width: 200px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        
+        .comparison-bars {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .bar {
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .bar.taricai {
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            color: #0a0a0a;
+        }
+        
+        .bar.competitor {
+            background: rgba(255,255,255,0.2);
+            color: #ffffff;
+        }
+        
+        .footer-info {
+            margin-top: auto;
+            padding-top: 40px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            color: #606060;
+            font-size: 14px;
+        }
+        
+        @media print {
+            .slide {
+                page-break-after: always;
+                height: 100vh;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SLIDE 1: PORTADA -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <h1>El Primer Agente IA para Clasificación Arancelaria en España</h1>
+            <p class="subtitle">Transformamos un proceso de 3-5 horas en menos de 30 segundos</p>
+            
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <span class="stat-number">€424B</span>
+                    <span class="stat-label">Importaciones España/año</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">94,000</span>
+                    <span class="stat-label">Infracciones AEAT 2023</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">€30K+</span>
+                    <span class="stat-label">Sanción media por error</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number"><30s</span>
+                    <span class="stat-label">Tiempo clasificación</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-info">
+            <span>Pitch Deck Inversores | Pre-Seed 2026</span>
+            <span>hola@taricai.es | taricai.es</span>
+        </div>
+        <div class="slide-number">01</div>
+    </div>
+
+    <!-- SLIDE 2: EL PROBLEMA -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>El Problema</h2>
+        <p class="subtitle">Un proceso crítico que sigue siendo manual y fragmentado</p>
+        
+        <div class="two-column">
+            <div>
+                <h3>Proceso Actual</h3>
+                <ul>
+                    <li>Consultar TARIC UE (partida 10 dígitos)</li>
+                    <li>Verificar CLASS (AEAT) medidas nacionales</li>
+                    <li>Consultar MAPA (requisitos fitosanitarios)</li>
+                    <li>Verificar TRACES (notificación previa)</li>
+                    <li>Revisar SOIVRE (productos agroalimentarios)</li>
+                    <li>Calcular aranceles, IVA, antidumping</li>
+                    <li>Consultar EUR-Lex (reglamentos)</li>
+                    <li>Calcular Landed Cost final</li>
+                </ul>
+            </div>
+            <div>
+                <div class="highlight-box">
+                    <h3>Impacto del Problema</h3>
+                    <div style="margin: 30px 0;">
+                        <span class="stat-number" style="font-size: 72px;">3-5h</span>
+                        <p style="color: #a0a0a0; font-size: 18px;">Por cada operación de importación</p>
+                    </div>
+                    <div style="margin: 30px 0;">
+                        <span class="stat-number" style="font-size: 72px;">6+</span>
+                        <p style="color: #a0a0a0; font-size: 18px;">Fuentes oficiales a consultar</p>
+                    </div>
+                    <div style="margin: 30px 0;">
+                        <span class="stat-number" style="font-size: 72px;">30-50h</span>
+                        <p style="color: #a0a0a0; font-size: 18px;">Trabajo manual semanal por agente</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">02</div>
+    </div>
+
+    <!-- SLIDE 3: LA SOLUCIÓN -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>La Solución</h2>
+        <p class="subtitle">Un agente de IA que automatiza todo el proceso</p>
+        
+        <div class="three-column">
+            <div class="feature-card">
+                <h4>🎯 Clasificador TARIC</h4>
+                <p>Identificación de partida de 10 dígitos desde texto libre o imagen del producto. Precisión >90%.</p>
+            </div>
+            <div class="feature-card">
+                <h4>💰 Calculador de Tributos</h4>
+                <p>Aranceles, IVA, impuestos especiales, derechos antidumping y acuerdos preferenciales automáticos.</p>
+            </div>
+            <div class="feature-card">
+                <h4>🌿 Control Fitosanitario</h4>
+                <p>Requisitos MAPA, TRACES, SOIVRE. Alertas RAPEX y control CITES para mercancías reguladas.</p>
+            </div>
+            <div class="feature-card">
+                <h4>📊 Landed Cost</h4>
+                <p>FOB + flete + seguro + aranceles + IVA + tasas portuarias españolas reales. Exportable a Excel/PDF.</p>
+            </div>
+            <div class="feature-card">
+                <h4>📋 Gestión Documental</h4>
+                <p>Checklist automático: DUA, EUR.1, certificados de origen, certificados fitosanitarios, T2L.</p>
+            </div>
+            <div class="feature-card">
+                <h4>🤖 Agente Conversacional</h4>
+                <p>Interfaz en español que orquesta todos los módulos en una sola consulta. Historial completo.</p>
+            </div>
+        </div>
+        
+        <div class="cta-box" style="margin-top: 40px;">
+            <h3>De 3-5 horas a menos de 30 segundos</h3>
+            <p>Una única consulta conversacional para toda la información que necesitas</p>
+        </div>
+        <div class="slide-number">03</div>
+    </div>
+
+    <!-- SLIDE 4: MERCADO -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>Oportunidad de Mercado</h2>
+        <p class="subtitle">Un mercado grande con necesidad clara de automatización</p>
+        
+        <div class="two-column">
+            <div>
+                <h3>TAM / SAM / SOM</h3>
+                <div class="highlight-box">
+                    <div style="margin-bottom: 30px;">
+                        <span class="stat-number">€12M</span>
+                        <span class="stat-label">TAM - Software aduanero Europa</span>
+                    </div>
+                    <div style="margin-bottom: 30px;">
+                        <span class="stat-number">€3.6M</span>
+                        <span class="stat-label">SAM - España + Latam</span>
+                    </div>
+                    <div>
+                        <span class="stat-number">€360K</span>
+                        <span class="stat-label">SOM - Objetivo Año 3 (150 clientes)</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h3>Segmentos Target</h3>
+                <div class="feature-card" style="margin-bottom: 20px;">
+                    <h4>Agencias de Aduanas</h4>
+                    <p><strong>1,200+</strong> agencias activas en España<br>
+                    Usuarios intensivos, 10-100 operaciones/día<br>
+                    Empresas de 2-50 personas</p>
+                </div>
+                <div class="feature-card">
+                    <h4>PYMEs Importadoras</h4>
+                    <p><strong>50,000+</strong> empresas con importaciones regulares<br>
+                    Pre-clasificaciones y cálculo de costes<br>
+                    Reducir dependencia de terceros</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">04</div>
+    </div>
+
+    <!-- SLIDE 5: COMPETENCIA -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>Análisis Competitivo</h2>
+        <p class="subtitle">Posición única en el mercado español</p>
+        
+        <div class="table-container">
+            <table>
+                <tr>
+                    <th>Competidor</th>
+                    <th>Origen</th>
+                    <th>IA</th>
+                    <th>Español</th>
+                    <th>Fuentes ES</th>
+                    <th>Precio PYME</th>
+                </tr>
+                <tr>
+                    <td><strong>TaricAI</strong></td>
+                    <td>🇪🇸 España</td>
+                    <td style="color: #00ff88;">✓ Conversacional</td>
+                    <td style="color: #00ff88;">✓</td>
+                    <td style="color: #00ff88;">✓ Completas</td>
+                    <td style="color: #00ff88;">✓ €99-499</td>
+                </tr>
+                <tr>
+                    <td>dbTaric</td>
+                    <td>🇪🇸 España</td>
+                    <td style="color: #ff6b6b;">✗ Manual</td>
+                    <td style="color: #00ff88;">✓</td>
+                    <td style="color: #ffaa00;">Parcial</td>
+                    <td style="color: #00ff88;">✓</td>
+                </tr>
+                <tr>
+                    <td>Digicust</td>
+                    <td>🇦🇹 Austria</td>
+                    <td style="color: #00ff88;">✓ Avanzada</td>
+                    <td style="color: #ff6b6b;">✗ Inglés</td>
+                    <td style="color: #ff6b6b;">✗</td>
+                    <td style="color: #00ff88;">✓ €149-499</td>
+                </tr>
+                <tr>
+                    <td>MIC-CUST</td>
+                    <td>🇩🇪 Alemania</td>
+                    <td style="color: #00ff88;">✓</td>
+                    <td style="color: #ff6b6b;">✗</td>
+                    <td style="color: #ff6b6b;">✗</td>
+                    <td style="color: #ff6b6b;">✗ Enterprise</td>
+                </tr>
+                <tr>
+                    <td>Avalara</td>
+                    <td>🇺🇸 USA</td>
+                    <td style="color: #ffaa00;">Parcial</td>
+                    <td style="color: #ffaa00;">Parcial</td>
+                    <td style="color: #ff6b6b;">✗</td>
+                    <td style="color: #ff6b6b;">✗ Enterprise</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="highlight-box">
+            <h3>Ventaja Competitiva Única</h3>
+            <p style="font-size: 20px; color: #ffffff;">Único agente IA conversacional en español con fuentes oficiales españolas integradas (AEAT, MAPA, TRACES, SOIVRE) y precio accesible para PYMEs.</p>
+        </div>
+        <div class="slide-number">05</div>
+    </div>
+
+    <!-- SLIDE 6: MODELO DE NEGOCIO -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>Modelo de Negocio</h2>
+        <p class="subtitle">SaaS con suscripción mensual escalable</p>
+        
+        <div class="table-container">
+            <table>
+                <tr>
+                    <th>Plan</th>
+                    <th>Precio/mes</th>
+                    <th>Operaciones</th>
+                    <th>Target</th>
+                    <th>Features</th>
+                </tr>
+                <tr>
+                    <td><strong>STARTER</strong></td>
+                    <td style="color: #00d4ff; font-weight: 600;">€99</td>
+                    <td>50/mes</td>
+                    <td>PYMEs pequeñas</td>
+                    <td>Clasificación + Tributos</td>
+                </tr>
+                <tr>
+                    <td><strong>PROFESSIONAL</strong></td>
+                    <td style="color: #00d4ff; font-weight: 600;">€249</td>
+                    <td>200/mes</td>
+                    <td>Agencias pequeñas</td>
+                    <td>+ Fitosanitario + Landed Cost</td>
+                </tr>
+                <tr>
+                    <td><strong>ENTERPRISE</strong></td>
+                    <td style="color: #00d4ff; font-weight: 600;">€499</td>
+                    <td>Ilimitado</td>
+                    <td>Agencias medianas</td>
+                    <td>+ API + Integraciones ERP</td>
+                </tr>
+                <tr>
+                    <td><strong>CUSTOM</strong></td>
+                    <td style="color: #00d4ff; font-weight: 600;">€1,000+</td>
+                    <td>Personalizado</td>
+                    <td>Grandes operadores</td>
+                    <td>+ SLA + Soporte dedicado</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="stat-grid" style="margin-top: 40px;">
+            <div class="stat-box">
+                <span class="stat-number">€172</span>
+                <span class="stat-label">ARPU Mensual (Año 4)</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">&lt;2%</span>
+                <span class="stat-label">Churn Objetivo</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">>30x</span>
+                <span class="stat-label">LTV/CAC (Año 3)</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">40%</span>
+                <span class="stat-label">Margen EBITDA (Año 5)</span>
+            </div>
+        </div>
+        <div class="slide-number">06</div>
+    </div>
+
+    <!-- SLIDE 7: PROYECCIONES FINANCIERAS -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>Proyecciones Financieras</h2>
+        <p class="subtitle">Plan a 5 años con crecimiento sostenible</p>
+        
+        <div class="table-container">
+            <table>
+                <tr>
+                    <th>Métrica</th>
+                    <th>Año 1</th>
+                    <th>Año 2</th>
+                    <th>Año 3</th>
+                    <th>Año 4</th>
+                    <th>Año 5</th>
+                </tr>
+                <tr>
+                    <td><strong>Clientes</strong></td>
+                    <td>45</td>
+                    <td>115</td>
+                    <td>210</td>
+                    <td>320</td>
+                    <td>440</td>
+                </tr>
+                <tr>
+                    <td><strong>ARR</strong></td>
+                    <td>€62K</td>
+                    <td>€212K</td>
+                    <td>€424K</td>
+                    <td>€661K</td>
+                    <td style="color: #00ff88; font-weight: 600;">€948K</td>
+                </tr>
+                <tr>
+                    <td><strong>Costos</strong></td>
+                    <td>€94K</td>
+                    <td>€190K</td>
+                    <td>€308K</td>
+                    <td>€435K</td>
+                    <td>€570K</td>
+                </tr>
+                <tr>
+                    <td><strong>EBITDA</strong></td>
+                    <td style="color: #ff6b6b;">-€31K</td>
+                    <td style="color: #00ff88;">€22K</td>
+                    <td style="color: #00ff88;">€116K</td>
+                    <td style="color: #00ff88;">€226K</td>
+                    <td style="color: #00ff88; font-weight: 600;">€378K</td>
+                </tr>
+                <tr>
+                    <td><strong>Margen EBITDA</strong></td>
+                    <td>-51%</td>
+                    <td>10%</td>
+                    <td>27%</td>
+                    <td>34%</td>
+                    <td style="color: #00ff88; font-weight: 600;">40%</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="two-column" style="margin-top: 30px;">
+            <div class="highlight-box">
+                <h3>Break-even</h3>
+                <span class="stat-number">Mes 15-18</span>
+                <p style="color: #a0a0a0;">Con aproximadamente 70 clientes activos</p>
+            </div>
+            <div class="highlight-box">
+                <h3>Crecimiento Acumulado</h3>
+                <span class="stat-number">15x</span>
+                <p style="color: #a0a0a0;">ARR de €62K a €948K en 5 años</p>
+            </div>
+        </div>
+        <div class="slide-number">07</div>
+    </div>
+
+    <!-- SLIDE 8: EQUIPO -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>El Equipo</h2>
+        <p class="subtitle">Combinación única de comercio exterior, tecnología y experiencia sectorial</p>
+        
+        <div class="three-column">
+            <div class="feature-card" style="text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 20px;">👤</div>
+                <h4>Kevin Daniel Suárez Largo</h4>
+                <p style="color: #00d4ff; margin-bottom: 15px;">CEO & Founder</p>
+                <p>Licenciado en Comercio Exterior<br>
+                Máster en Comercio Internacional (EUDE)<br>
+                Conocimiento directo del sistema TARIC<br>
+                Experiencia en operativa aduanera ES/Latam</p>
+            </div>
+            <div class="feature-card" style="text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 20px;">👤</div>
+                <h4>Anderson Escorcia Hernández</h4>
+                <p style="color: #00d4ff; margin-bottom: 15px;">CTO & Co-Founder</p>
+                <p>Ingeniero en Sistemas<br>
+                Especialista en IA y LLMs<br>
+                Arquitectura cloud y APIs<br>
+                Desarrollo full-stack</p>
+            </div>
+            <div class="feature-card" style="text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 20px;">👤</div>
+                <h4>Pelayo Serrano García</h4>
+                <p style="color: #00d4ff; margin-bottom: 15px;">Advisor Sectorial</p>
+                <p>Representante Aduanero Autorizado (RAA)<br>
+                <strong>+38 años</strong> en sector aduanero español<br>
+                Docente en EUDE Business School<br>
+                Red de contactos OEA, AEAT, CAADE</p>
+            </div>
+        </div>
+        
+        <div class="highlight-box" style="margin-top: 30px;">
+            <p style="font-size: 20px; color: #ffffff; text-align: center;">
+                <strong>Ventaja competitiva del equipo:</strong> La combinación de conocimiento técnico en IA + experiencia real en comercio exterior + red de contactos de 38 años en el sector es extremadamente difícil de replicar.
+            </p>
+        </div>
+        <div class="slide-number">08</div>
+    </div>
+
+    <!-- SLIDE 9: ROADMAP -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>Roadmap 24 Meses</h2>
+        <p class="subtitle">Plan de ejecución con hitos claros y medibles</p>
+        
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-label">M1-M3</div>
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <strong>FUNDACIÓN</strong><br>
+                    Constitución SL<br>
+                    MVP comercial<br>
+                    10 pilotos gratuitos
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">M4-M6</div>
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <strong>VALIDACIÓN</strong><br>
+                    Conversión pilotos<br>
+                    Lanzamiento público<br>
+                    Primer MRR positivo
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">M7-M12</div>
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <strong>CRECIMIENTO</strong><br>
+                    45 clientes<br>
+                    Plan Enterprise<br>
+                    Equipo ventas
+                </div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">M13-M24</div>
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <strong>ESCALA</strong><br>
+                    115+ clientes<br>
+                    Entrada Latam<br>
+                    Break-even
+                </div>
+            </div>
+        </div>
+        
+        <div class="two-column" style="margin-top: 40px;">
+            <div>
+                <h3>Hitos Año 1</h3>
+                <ul>
+                    <li>45 clientes pagando</li>
+                    <li>€5,200 MRR</li>
+                    <li>Precisión clasificación >90%</li>
+                    <li>Módulo fitosanitario completo</li>
+                    <li>Churn mensual <3%</li>
+                </ul>
+            </div>
+            <div>
+                <h3>Hitos Año 2</h3>
+                <ul>
+                    <li>115 clientes totales</li>
+                    <li>€17,700 MRR</li>
+                    <li>15 clientes Enterprise</li>
+                    <li>Primer cliente Latam</li>
+                    <li>Equipo de 5 personas</li>
+                </ul>
+            </div>
+        </div>
+        <div class="slide-number">09</div>
+    </div>
+
+    <!-- SLIDE 10: LA OPORTUNIDAD -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <h2>La Oportunidad de Inversión</h2>
+        <p class="subtitle">Pre-Seed para capturar el mercado español</p>
+        
+        <div class="two-column">
+            <div>
+                <div class="highlight-box">
+                    <h3>Inversión Solicitada</h3>
+                    <span class="stat-number">€50K - €100K</span>
+                    <p style="color: #a0a0a0;">Ronda Pre-Seed</p>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 20px;">
+                    <h3>Valoración Pre-Money</h3>
+                    <span class="stat-number">€400K - €600K</span>
+                    <p style="color: #a0a0a0;">Basado en producto funcional + equipo</p>
+                </div>
+                
+                <div class="highlight-box" style="margin-top: 20px;">
+                    <h3>Retorno Proyectado</h3>
+                    <span class="stat-number">5-10x</span>
+                    <p style="color: #a0a0a0;">En horizonte de 5 años</p>
+                </div>
+            </div>
+            <div>
+                <h3>Uso de Fondos</h3>
+                <ul>
+                    <li><strong>40%</strong> - Desarrollo producto (fuentes oficiales, fitosanitario)</li>
+                    <li><strong>30%</strong> - Captación primeros 45 clientes</li>
+                    <li><strong>20%</strong> - Infraestructura y operaciones</li>
+                    <li><strong>10%</strong> - Legal y compliance</li>
+                </ul>
+                
+                <h3 style="margin-top: 30px;">Por qué Ahora</h3>
+                <ul>
+                    <li>Ventana competitiva de 12-18 meses</li>
+                    <li>Digicust expande a Benelux (no España aún)</li>
+                    <li>Mercado español sin solución IA nativa</li>
+                    <li>Producto base 70% completado</li>
+                </ul>
+            </div>
+        </div>
+        <div class="slide-number">10</div>
+    </div>
+
+    <!-- SLIDE 11: CIERRE -->
+    <div class="slide">
+        <div class="logo">Taric<span>AI</span></div>
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+            <h1 style="font-size: 64px; margin-bottom: 30px;">¿Listo para transformar<br>el comercio exterior español?</h1>
+            
+            <p class="subtitle" style="max-width: 800px;">
+                "El comercio exterior español maneja €400.000 millones en importaciones anuales. 
+                Toda esa actividad necesita clasificación arancelaria. Hoy se hace a mano. 
+                TaricAI la automatiza."
+            </p>
+            
+            <div class="cta-box" style="max-width: 600px; margin-top: 60px;">
+                <h3>Contacto</h3>
+                <p style="font-size: 24px;">Kevin Daniel Suárez Largo</p>
+                <p>hola@taricai.es | taricai.es</p>
+            </div>
+        </div>
+        
+        <div class="footer-info">
+            <span>TaricAI © 2026 | Madrid, España</span>
+            <span>Documento confidencial para inversores</span>
+        </div>
+        <div class="slide-number">11</div>
+    </div>
+
+</body>
+</html>
